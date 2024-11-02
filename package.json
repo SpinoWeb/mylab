@@ -1,0 +1,22 @@
+{
+  "name": "mylibs",
+  "version": "0.0.0",
+  "description": "My Lab",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SpinoWeb/mylibs.git"
+  },
+  "author": "SpinoWeb",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SpinoWeb/mylibs/issues"
+  },
+  "homepage": "https://github.com/SpinoWeb/mylibs#readme",
+  "dependencies": {
+    "browser-fs-access": "^0.35.0"
+  }
+}
