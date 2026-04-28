@@ -1,0 +1,2371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bridge1D</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.1.12/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart, ReferenceDot, ReferenceLine, Label } = window.Recharts;
+
+    const Info = ({ className }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+    );
+
+    // --- FORMATTING HELPERS ---
+    function enforceMinDecimals(val, minDecimals) {
+        if (val === '' || val == null) return '';
+        let num = parseFloat(val);
+        if (isNaN(num)) return '';
+        let str = num.toString();
+        if (str.includes('e')) return num.toFixed(minDecimals);
+        let parts = str.split('.');
+        if (parts.length === 1) {
+            return str + '.' + '0'.repeat(minDecimals);
+        } else if (parts[1].length < minDecimals) {
+            return str + '0'.repeat(minDecimals - parts[1].length);
+        }
+        return str;
+    }
+
+    const stepToNearest = (currentStr, direction, stepSize, minVal, minDecimals, maxVal) => {
+        let current = parseFloat(currentStr);
+        if (isNaN(current)) current = minVal;
+        
+        let next;
+        if (direction > 0) {
+            next = Math.floor((current + stepSize) / stepSize + 1e-5) * stepSize;
+        } else {
+            next = Math.ceil((current - stepSize) / stepSize - 1e-5) * stepSize;
+        }
+        
+        next = Math.round(next * 100000) / 100000;
+        
+        if (next < minVal) next = minVal;
+        if (maxVal !== undefined && next > maxVal) next = maxVal;
+        
+        return enforceMinDecimals(next, minDecimals);
+    };
+
+    // --- TRIDIAGONAL SOLVER ---
+    function solveTridiagonal(a, b, c, d) {
+      const n = b.length;
+      if (n === 0) return [];
+      if (n === 1) return [d[0] / b[0]];
+
+      const c_prime = new Array(n - 1);
+      const d_prime = new Array(n);
+      const x = new Array(n);
+
+      c_prime[0] = c[0] / b[0];
+      d_prime[0] = d[0] / b[0];
+
+      for (let i = 1; i < n - 1; i++) {
+        const m = 1.0 / (b[i] - a[i - 1] * c_prime[i - 1]);
+        c_prime[i] = c[i] * m;
+        d_prime[i] = (d[i] - a[i - 1] * d_prime[i - 1]) * m;
+      }
+
+      const m = 1.0 / (b[n - 1] - a[n - 2] * c_prime[n - 2]);
+      d_prime[n - 1] = (d[n - 1] - a[n - 2] * d_prime[n - 2]) * m;
+
+      x[n - 1] = d_prime[n - 1];
+      for (let i = n - 2; i >= 0; i--) {
+        x[i] = d_prime[i] - c_prime[i] * x[i + 1];
+      }
+      return x;
+    }
+
+    // --- TICK GENERATOR ---
+    function getNiceTicks(min, max, tickCount = 7) {
+      if (Math.abs(max - min) < 1e-5) return [Math.floor(min - 10), 0, Math.ceil(min + 10)];
+      
+      const range = max - min;
+      const roughStep = range / (tickCount - 1);
+      const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+      const normalizedStep = roughStep / magnitude;
+      
+      let niceNormalizedStep;
+      if (normalizedStep <= 1) niceNormalizedStep = 1;
+      else if (normalizedStep <= 2) niceNormalizedStep = 2;
+      else if (normalizedStep <= 2.5) niceNormalizedStep = 2.5;
+      else if (normalizedStep <= 5) niceNormalizedStep = 5;
+      else niceNormalizedStep = 10;
+      
+      const step = Math.max(1, Math.round(niceNormalizedStep * magnitude));
+      
+      const minMultiplier = Math.floor(min / step);
+      const maxMultiplier = Math.ceil(max / step);
+      
+      const ticks = [];
+      for (let i = minMultiplier; i <= maxMultiplier; i++) {
+        ticks.push(i * step);
+      }
+      return ticks;
+    }
+
+    // --- STANDARD LOAD DEFINITIONS ---
+    const LOAD_CATEGORIES = {
+      'AS 5100': {
+        A160: {
+          name: 'A160',
+          UDL: 0,
+          axles: [
+            { offset: 0, P: 160 }
+          ]
+        },
+        M1600_TRI: {
+          name: 'M1600 Tri-Axle',
+          UDL: 6,
+          axles: [
+            { offset: 0.0, P: 120 }, { offset: 1.25, P: 120 }, { offset: 2.5, P: 120 }
+          ]
+        },
+        M1600: {
+          name: 'M1600',
+          UDL: 6,
+          axles: [
+            { offset: 0.0, P: 120 }, { offset: 1.25, P: 120 }, { offset: 2.5, P: 120 },
+            { offset: 7.5, P: 120 }, { offset: 8.75, P: 120 }, { offset: 10.0, P: 120 },
+            { offset: 16.25, P: 120 }, { offset: 17.5, P: 120 }, { offset: 18.75, P: 120 },
+            { offset: 22.5, P: 120 }, { offset: 23.75, P: 120 }, { offset: 25.0, P: 120 }
+          ]
+        },
+        S1600: {
+          name: 'S1600',
+          UDL: 24,
+          axles: [
+            { offset: 0.0, P: 80 }, { offset: 1.25, P: 80 }, { offset: 2.5, P: 80 },
+            { offset: 7.5, P: 80 }, { offset: 8.75, P: 80 }, { offset: 10.0, P: 80 },
+            { offset: 16.25, P: 80 }, { offset: 17.5, P: 80 }, { offset: 18.75, P: 80 },
+            { offset: 22.5, P: 80 }, { offset: 23.75, P: 80 }, { offset: 25.0, P: 80 }
+          ]
+        },
+        HLP320: {
+          name: 'HLP320',
+          UDL: 0,
+          axles: Array.from({length: 16}, (_, i) => ({ offset: i * 1.8, P: 200 }))
+        },
+        HLP400: {
+          name: 'HLP400',
+          UDL: 0,
+          axles: Array.from({length: 16}, (_, i) => ({ offset: i * 1.8, P: 250 }))
+        },
+        RAIL: {
+          name: 'Rail Loading (LA)',
+          UDL: 0,
+          axles: []
+        }
+      },
+      'Austroads': {
+        A14: {
+          name: 'A14',
+          UDL: 0,
+          axles: [{ offset: 0, P: 140 }]
+        },
+        L44: {
+          name: 'L44',
+          UDL: 12.5,
+          axles: [{ offset: 0, P: 106 }]
+        },
+        T44: {
+          name: 'T44',
+          UDL: 0,
+          axles: [
+            { offset: 0, P: 48 }, { offset: 3.7, P: 96 }, { offset: 4.9, P: 96 }, { offset: 7.9, P: 96 }, { offset: 9.1, P: 96 }
+          ]
+        }
+      },
+      'MRWA Load Assessment': {
+        'M-Truck': {
+          name: 'M-Truck',
+          UDL: 0,
+          axles: [{ offset: 0, P: 20 }, { offset: 4.25, P: 80 }]
+        },
+        'Tandem Axle Group': {
+          name: 'Tandem Axle Group',
+          UDL: 0,
+          axles: [{ offset: 0, P: 90 }, { offset: 1.2, P: 90 }]
+        },
+        'Triaxle Axle Group': {
+          name: 'Triaxle Axle Group',
+          UDL: 0,
+          axles: []
+        },
+        'Standard Quad Axle Group': {
+          name: 'Standard Quad Axle Group',
+          UDL: 0,
+          axles: []
+        },
+        '484 Quad Axle Group': {
+          name: '484 Quad Axle Group',
+          UDL: 0,
+          axles: []
+        },
+        'Special Multiple Axle Vehicle': {
+          name: 'Special Multiple Axle Vehicle',
+          UDL: 0,
+          axles: []
+        }
+      },
+      'NAASRA 1970': {
+        H20: {
+          name: 'H20',
+          UDL: 0,
+          axles: [{ offset: 0, P: 35.5857728 }, { offset: 4.2672, P: 142.3430912 }]
+        },
+        H15: {
+          name: 'H15',
+          UDL: 0,
+          axles: [{ offset: 0, P: 26.6893296 }, { offset: 4.2672, P: 106.7573184 }]
+        },
+        H10: {
+          name: 'H10',
+          UDL: 0,
+          axles: [{ offset: 0, P: 17.7928864 }, { offset: 4.2672, P: 71.1715456 }]
+        },
+        HS20: {
+          name: 'HS20',
+          UDL: 0,
+          axles: [{ offset: 0, P: 35.5857728 }, { offset: 4.2672, P: 142.3430912 }, { offset: 8.5344, P: 142.3430912 }]
+        },
+        HS15: {
+          name: 'HS15',
+          UDL: 0,
+          axles: [{ offset: 0, P: 26.6893296 }, { offset: 4.2672, P: 106.7573184 }, { offset: 8.5344, P: 106.7573184 }]
+        }
+      },
+      'TMR Load Assessment': {
+        '1G': { 
+          name: '1G - GML Semi-Trailer (42.5 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 80.9048625}, {offset: 4.2, P: 80.9048625}, {offset: 8.6, P: 65.37766667}, {offset: 9.8, P: 65.37766667}, {offset: 11.0, P: 65.37766667} ] 
+        },
+        '1H': { 
+          name: '1H - HML Semi-Trailer (45.5 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 83.356525}, {offset: 4.2, P: 83.356525}, {offset: 8.6, P: 73.549875}, {offset: 9.8, P: 73.549875}, {offset: 11.0, P: 73.549875} ] 
+        },
+        '2G': { 
+          name: '2G - GML Road Train (95.5 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 80.9048625}, {offset: 4.2, P: 80.9048625}, {offset: 8.6, P: 80.9048625}, {offset: 9.8, P: 80.9048625}, {offset: 14.2, P: 65.37766667}, {offset: 15.4, P: 65.37766667}, {offset: 16.6, P: 65.37766667}, {offset: 21.0, P: 80.9048625}, {offset: 22.2, P: 80.9048625}, {offset: 26.6, P: 65.37766667}, {offset: 27.8, P: 65.37766667}, {offset: 29.0, P: 65.37766667} ] 
+        },
+        '2H': { 
+          name: '2H - HML Road Train (102 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 83.356525}, {offset: 4.2, P: 83.356525}, {offset: 8.6, P: 83.356525}, {offset: 9.8, P: 83.356525}, {offset: 14.2, P: 73.549875}, {offset: 15.4, P: 73.549875}, {offset: 16.6, P: 73.549875}, {offset: 21.0, P: 83.356525}, {offset: 22.2, P: 83.356525}, {offset: 26.6, P: 73.549875}, {offset: 27.8, P: 73.549875}, {offset: 29.0, P: 73.549875} ] 
+        },
+        '3': { 
+          name: '3 - 48-t Crane', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 117.6798}, {offset: 1.65, P: 117.6798}, {offset: 4.0, P: 117.6798}, {offset: 5.65, P: 117.6798} ] 
+        },
+        '4': { 
+          name: '4 - 79.5-t Crane', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 98.0665}, {offset: 3.88, P: 98.0665}, {offset: 5.58, P: 98.0665}, {offset: 7.6, P: 98.0665}, {offset: 9.32, P: 98.0665}, {offset: 11.04, P: 98.0665}, {offset: 17.04, P: 63.743225}, {offset: 18.84, P: 63.743225}, {offset: 20.64, P: 63.743225} ] 
+        },
+        '5': { 
+          name: '5 - Heavy Load Platform', 
+          UDL: 0, 
+          axles: Array.from({length: 16}, (_, i) => ({ offset: i * 1.8, P: 196.133 })) 
+        },
+        '6G': { 
+          name: '6G - GML AAB Quad (142.5 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 80.9048625}, {offset: 4.2, P: 80.9048625}, {offset: 8.6, P: 65.37766667}, {offset: 9.8, P: 65.37766667}, {offset: 11.0, P: 65.37766667}, {offset: 15.4, P: 65.37766667}, {offset: 16.6, P: 65.37766667}, {offset: 17.8, P: 65.37766667}, {offset: 22.2, P: 65.37766667}, {offset: 23.4, P: 65.37766667}, {offset: 24.6, P: 65.37766667}, {offset: 29.0, P: 65.37766667}, {offset: 30.2, P: 65.37766667}, {offset: 31.4, P: 65.37766667}, {offset: 35.8, P: 65.37766667}, {offset: 37.0, P: 65.37766667}, {offset: 38.2, P: 65.37766667}, {offset: 42.6, P: 65.37766667}, {offset: 43.8, P: 65.37766667}, {offset: 45.0, P: 65.37766667} ] 
+        },
+        '6H': { 
+          name: '6H - HML AAB Quad (158 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 83.356525}, {offset: 4.2, P: 83.356525}, {offset: 8.6, P: 73.549875}, {offset: 9.8, P: 73.549875}, {offset: 11.0, P: 73.549875}, {offset: 15.4, P: 73.549875}, {offset: 16.6, P: 73.549875}, {offset: 17.8, P: 73.549875}, {offset: 22.2, P: 73.549875}, {offset: 23.4, P: 73.549875}, {offset: 24.6, P: 73.549875}, {offset: 29.0, P: 73.549875}, {offset: 30.2, P: 73.549875}, {offset: 31.4, P: 73.549875}, {offset: 35.8, P: 73.549875}, {offset: 37.0, P: 73.549875}, {offset: 38.2, P: 73.549875}, {offset: 42.6, P: 73.549875}, {offset: 43.8, P: 73.549875}, {offset: 45.0, P: 73.549875} ] 
+        },
+        '7G': { 
+          name: '7G - GML B-Double (62.5 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 80.9048625}, {offset: 4.2, P: 80.9048625}, {offset: 8.6, P: 65.37766667}, {offset: 9.8, P: 65.37766667}, {offset: 11.0, P: 65.37766667}, {offset: 18.0, P: 65.37766667}, {offset: 19.2, P: 65.37766667}, {offset: 20.4, P: 65.37766667} ] 
+        },
+        '7H': { 
+          name: '7H - HML B-Double (68 t)', 
+          UDL: 0, 
+          axles: [ {offset: 0, P: 58.8399}, {offset: 3.0, P: 83.356525}, {offset: 4.2, P: 83.356525}, {offset: 8.6, P: 73.549875}, {offset: 9.8, P: 73.549875}, {offset: 11.0, P: 73.549875}, {offset: 18.0, P: 73.549875}, {offset: 19.2, P: 73.549875}, {offset: 20.4, P: 73.549875} ] 
+        }
+      }
+    };
+
+    const CATEGORY_ORDER = ['AS 5100', 'Austroads', 'MRWA Load Assessment', 'NAASRA 1970', 'TMR Load Assessment', 'Custom'];
+    const AS5100_ORDER = ['A160', 'M1600_TRI', 'M1600', 'S1600', 'HLP320', 'HLP400', 'RAIL'];
+    const MRWA_ORDER = ['M-Truck', 'Tandem Axle Group', 'Triaxle Axle Group', 'Standard Quad Axle Group', '484 Quad Axle Group', 'Special Multiple Axle Vehicle'];
+    const NAASRA_ORDER = ['H20', 'H15', 'H10', 'HS20', 'HS15'];
+
+    // --- BRIDGE ANALYSIS ENGINE ---
+    const analyzeBridgeState = (spans, internalSupports, loadPos, loadConfig, udlArray, xPoints) => {
+      const nSpans = spans.length;
+      const nNodes = nSpans + 1;
+      
+      const M1 = new Array(nSpans).fill(0);
+      const M2 = new Array(nSpans).fill(0);
+      const V1 = new Array(nSpans).fill(0);
+      const V2 = new Array(nSpans).fill(0);
+      const axelsInSpan = Array.from({ length: nSpans }, () => []);
+
+      let cumulativeLength = 0;
+      const spanStarts = [0];
+      for (let i = 0; i < nSpans; i++) {
+        cumulativeLength += spans[i];
+        spanStarts.push(cumulativeLength);
+      }
+
+      const subBridges = [];
+      let currentSub = [0];
+      for (let i = 0; i < nSpans - 1; i++) {
+        if (internalSupports[i]) {
+          currentSub.push(i + 1);
+        } else {
+          subBridges.push(currentSub);
+          currentSub = [i + 1];
+        }
+      }
+      subBridges.push(currentSub);
+
+      for (const sub of subBridges) {
+        const subNSpans = sub.length;
+        const subNNodes = subNSpans + 1;
+
+        const b = new Array(subNNodes).fill(0);
+        const a = new Array(subNNodes - 1).fill(0);
+        const c = new Array(subNNodes - 1).fill(0);
+        const F = new Array(subNNodes).fill(0);
+
+        const subM1_FE = new Array(subNSpans).fill(0);
+        const subM2_FE = new Array(subNSpans).fill(0);
+        const subP_b_L = new Array(subNSpans).fill(0);
+        const subP_a_L = new Array(subNSpans).fill(0);
+
+        for (let localIdx = 0; localIdx < subNSpans; localIdx++) {
+          const globalIdx = sub[localIdx];
+          const L = spans[globalIdx];
+          const startX = spanStarts[globalIdx];
+          const endX = spanStarts[globalIdx + 1];
+
+          b[localIdx] += 4 / L;
+          b[localIdx + 1] += 4 / L;
+          a[localIdx] = 2 / L;
+          c[localIdx] = 2 / L;
+
+          subM1_FE[localIdx] += (udlArray[globalIdx] * L * L) / 12;
+          subM2_FE[localIdx] -= (udlArray[globalIdx] * L * L) / 12;
+          subP_b_L[localIdx] += (udlArray[globalIdx] * L) / 2;
+          subP_a_L[localIdx] += (udlArray[globalIdx] * L) / 2;
+
+          for (const axle of loadConfig) {
+            const axleX = loadPos - axle.offset;
+            if (axleX >= startX && (axleX < endX || (globalIdx === nSpans - 1 && axleX <= endX))) {
+              const xLocal = axleX - startX;
+              const a_dist = xLocal;
+              const b_dist = L - xLocal;
+              const P = axle.P;
+
+              subM1_FE[localIdx] += (P * a_dist * b_dist * b_dist) / (L * L);
+              subM2_FE[localIdx] -= (P * a_dist * a_dist * b_dist) / (L * L);
+              subP_b_L[localIdx] += (P * b_dist) / L;
+              subP_a_L[localIdx] += (P * a_dist) / L;
+              axelsInSpan[globalIdx].push({ x: a_dist, P: P });
+            }
+          }
+
+          F[localIdx] -= subM1_FE[localIdx];
+          F[localIdx + 1] -= subM2_FE[localIdx];
+        }
+
+        const theta = solveTridiagonal(a, b, c, F);
+
+        for (let localIdx = 0; localIdx < subNSpans; localIdx++) {
+          const globalIdx = sub[localIdx];
+          const L = spans[globalIdx];
+
+          M1[globalIdx] = subM1_FE[localIdx] + (4 * theta[localIdx] + 2 * theta[localIdx + 1]) / L;
+          M2[globalIdx] = subM2_FE[localIdx] + (2 * theta[localIdx] + 4 * theta[localIdx + 1]) / L;
+          
+          V1[globalIdx] = subP_b_L[localIdx] + (M1[globalIdx] + M2[globalIdx]) / L;
+          V2[globalIdx] = subP_a_L[localIdx] - (M1[globalIdx] + M2[globalIdx]) / L;
+        }
+      }
+
+      const R = new Array(nNodes).fill(0);
+      R[0] = V1[0];
+      for (let i = 1; i < nSpans; i++) {
+        R[i] = V2[i - 1] + V1[i];
+      }
+      R[nSpans] = V2[nSpans - 1];
+
+      const M_diagram = [];
+      const V_diagram = [];
+
+      let currentSpanIndex = 0;
+      for (const evalX of xPoints) {
+        currentSpanIndex = 0;
+        while (currentSpanIndex < nSpans - 1 && evalX > spanStarts[currentSpanIndex + 1] + 1e-6) {
+          currentSpanIndex++;
+        }
+
+        const xLocal = evalX - spanStarts[currentSpanIndex];
+        let Vx = V1[currentSpanIndex] - udlArray[currentSpanIndex] * xLocal;
+        let Mx = -M1[currentSpanIndex] + V1[currentSpanIndex] * xLocal - 0.5 * udlArray[currentSpanIndex] * xLocal * xLocal;
+
+        for (const axle of axelsInSpan[currentSpanIndex]) {
+          if (xLocal > axle.x) {
+            Vx -= axle.P;
+            Mx -= axle.P * (xLocal - axle.x);
+          }
+        }
+
+        if (Math.abs(Mx) < 1e-5) Mx = 0;
+        if (Math.abs(Vx) < 1e-5) Vx = 0;
+
+        M_diagram.push(Mx);
+        V_diagram.push(Vx);
+      }
+
+      return { M: M_diagram, V: V_diagram, R };
+    };
+
+    function App() {
+      const [spansInput, setSpansInput] = useState('15, 20, 15');
+      const [internalSupports, setInternalSupports] = useState([]);
+      
+      // Loading Categories and Types
+      const [selectedCategory, setSelectedCategory] = useState('AS 5100');
+      const [selectedLoad, setSelectedLoad] = useState('M1600');
+      
+      // Custom Vehicle State
+      const [customAxles, setCustomAxles] = useState([
+        { id: 1, offset: 0, P: 120 },
+        { id: 2, offset: 1.2, P: 120 }
+      ]);
+      const [customUDL, setCustomUDL] = useState(0);
+
+      // AS 5100 Specific State
+      const [m1600Spacing, setM1600Spacing] = useState("6.25");
+
+      // Austroads State
+      const [t44Spacing, setT44Spacing] = useState("3.0");
+      const [l44AxleMode, setL44AxleMode] = useState('bending');
+
+      // NAASRA 1970 State
+      const [naasraSpacing, setNaasraSpacing] = useState("4.2672");
+
+      // MRWA State
+      const [mrwaTriaxleModel, setMrwaTriaxleModel] = useState("Model 1");
+      const [mrwaStdQuadModel, setMrwaStdQuadModel] = useState("Model 1");
+      const [mrwa484QuadModel, setMrwa484QuadModel] = useState("Model 1");
+      const [mrwaSmaModel, setMrwaSmaModel] = useState("Models 1 & 2");
+      const [mrwaSmaSpacing, setMrwaSmaSpacing] = useState("1.55");
+
+      // Rail State
+      const [railSpacing, setRailSpacing] = useState("12.0");
+      const [railLoad, setRailLoad] = useState("300");
+
+      // Modifiers
+      const [includeDLA, setIncludeDLA] = useState(false);
+      const [dlaMode, setDlaMode] = useState('default');
+      const [customDlaVal, setCustomDlaVal] = useState("0.30");
+      const [tmrSpeed, setTmrSpeed] = useState('> 10 km/h');
+
+      const [includeULS, setIncludeULS] = useState(false);
+      const [ulsMode, setUlsMode] = useState('default');
+      const [customUlsVal, setCustomUlsVal] = useState("1.8");
+
+      const [patternUDL, setPatternUDL] = useState(true);
+      const [instantUdlPattern, setInstantUdlPattern] = useState([]);
+
+      const [sliderPos, setSliderPos] = useState(0);
+      const [direction, setDirection] = useState('forward');
+
+      const pressIntervalRef = useRef(null);
+
+      const startPress = (actionFn) => {
+          if (pressIntervalRef.current) clearInterval(pressIntervalRef.current);
+          actionFn();
+          pressIntervalRef.current = setInterval(actionFn, 100);
+      };
+
+      const stopPress = () => {
+          if (pressIntervalRef.current) {
+              clearInterval(pressIntervalRef.current);
+              pressIntervalRef.current = null;
+          }
+      };
+
+      useEffect(() => {
+          return () => {
+              if (pressIntervalRef.current) clearInterval(pressIntervalRef.current);
+          };
+      }, []);
+
+      const [simulationData, setSimulationData] = useState({
+        fineXPoints: [],
+        fineMaxM: [],
+        fineMinM: [],
+        fineMaxV: [],
+        fineMinV: [],
+        maxReactions: [],
+        minReactions: [],
+        L_total: 50,
+        truckLength: 18,
+        maxAxleP: 120,
+        activeScaledUDL: 6
+      });
+
+      const handleSpanChange = (e) => {
+        let val = e.target.value;
+        val = val.replace(/-/g, ''); 
+        val = val.replace(/[^\d,\.\s]/g, ''); 
+        val = val.replace(/(\.\d)\d+/g, '$1'); 
+        setSpansInput(val);
+      };
+
+      const spans = useMemo(() => {
+        const parsed = spansInput.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+        return parsed.length > 0 ? parsed : [20];
+      }, [spansInput]);
+
+      useEffect(() => {
+        setInternalSupports(new Array(Math.max(0, spans.length - 1)).fill(false));
+        setInstantUdlPattern(new Array(spans.length).fill(true));
+      }, [spans.length]);
+
+      const resetSubStates = () => {
+        setM1600Spacing("6.25");
+        setT44Spacing("3.0");
+        setNaasraSpacing("4.2672");
+        setRailSpacing("12.0");
+        setL44AxleMode('bending');
+        setMrwaTriaxleModel("Model 1");
+        setMrwaStdQuadModel("Model 1");
+        setMrwa484QuadModel("Model 1");
+        setMrwaSmaModel("Models 1 & 2");
+        setMrwaSmaSpacing("1.55");
+      };
+
+      const handleCategoryChange = (e) => {
+        const cat = e.target.value;
+        setSelectedCategory(cat);
+        if (cat !== 'Custom') {
+           if (cat === 'AS 5100') {
+               setSelectedLoad('A160');
+           } else if (cat === 'MRWA Load Assessment') {
+               setSelectedLoad(MRWA_ORDER[0]);
+           } else if (cat === 'NAASRA 1970') {
+               setSelectedLoad(NAASRA_ORDER[0]);
+           } else {
+               const sortedKeys = Object.keys(LOAD_CATEGORIES[cat]).sort((a, b) => a.localeCompare(b));
+               setSelectedLoad(sortedKeys[0]);
+           }
+        }
+        setDlaMode('default');
+        setUlsMode('default');
+        resetSubStates();
+      };
+
+      const handleLoadChange = (e) => {
+        setSelectedLoad(e.target.value);
+        resetSubStates();
+      };
+
+      const addCustomAxle = () => {
+         setCustomAxles(prev => {
+            const lastOffset = prev.length > 0 ? prev[prev.length - 1].offset : 0;
+            return [...prev, { id: Date.now(), offset: lastOffset + 1.2, P: 120 }];
+         });
+      };
+
+      const removeCustomAxle = (id) => {
+         setCustomAxles(prev => prev.filter(a => a.id !== id));
+      };
+
+      const updateCustomAxle = (id, field, value) => {
+         setCustomAxles(prev => prev.map(a => {
+            if (a.id === id) {
+               return { ...a, [field]: value };
+            }
+            return a;
+         }));
+      };
+
+      const defaultFactors = useMemo(() => {
+        let dla = 0.3;
+        let uls = 1.8;
+        
+        if (selectedCategory !== 'Custom') {
+           if (selectedCategory === 'TMR Load Assessment') {
+               const ulsMap = {
+                   '1G': 2.0, '1H': 2.0, '2G': 2.0, '2H': 2.0,
+                   '3': 1.8, '4': 1.8, '5': 1.5,
+                   '6G': 2.0, '6H': 2.0, '7G': 2.0, '7H': 2.0
+               };
+               uls = ulsMap[selectedLoad] || 1.8;
+
+               if (selectedLoad === '5') {
+                   dla = tmrSpeed === 'Stationary' ? 0.0 : 0.1;
+               } else {
+                   dla = tmrSpeed === 'Stationary' ? 0.0 : tmrSpeed === '<= 10 km/h' ? 0.1 : 0.4;
+               }
+           } else if (selectedCategory === 'MRWA Load Assessment') {
+               uls = 2.0;
+               dla = 0.3;
+               if (selectedLoad === 'Triaxle Axle Group' && mrwaTriaxleModel === 'Models 2 & 3') dla = 0.1;
+               if (selectedLoad === 'Standard Quad Axle Group' && mrwaStdQuadModel === 'Models 2 & 3') dla = 0.1;
+               if (selectedLoad === '484 Quad Axle Group' && mrwa484QuadModel === 'Models 2 & 3') dla = 0.1;
+               if (selectedLoad === 'Special Multiple Axle Vehicle') {
+                   uls = 1.5;
+                   dla = 0.1;
+               }
+           } else if (selectedCategory === 'Austroads') {
+               dla = 0.4;
+               uls = 2.0;
+           } else if (selectedCategory === 'NAASRA 1970') {
+               dla = 0.4;
+               uls = 2.0;
+           } else {
+               if (selectedLoad === 'A160') dla = 0.4;
+               else if (selectedLoad === 'M1600_TRI') dla = 0.35;
+               else if (selectedLoad === 'M1600') dla = 0.3;
+               else if (selectedLoad === 'S1600') dla = 0.0;
+               else if (selectedLoad.startsWith('HLP')) { dla = 0.1; uls = 1.5; }
+               else if (selectedLoad === 'RAIL') {
+                  const lMax = Math.max(...spans);
+                  let alpha = 1.0;
+                  if (lMax > 0.04) {
+                    alpha = 2.16 / (Math.sqrt(lMax) - 0.2) - 0.27;
+                    alpha = Math.max(0.16, Math.min(1.0, alpha));
+                  }
+                  dla = alpha;
+                  uls = 1.6;
+               }
+           }
+        }
+        return { dla, uls };
+      }, [selectedCategory, selectedLoad, spans, tmrSpeed, mrwaTriaxleModel, mrwaStdQuadModel, mrwa484QuadModel]);
+
+      const loadDef = useMemo(() => {
+        const L_total = spans.reduce((a, b) => a + b, 0);
+
+        if (selectedCategory === 'Custom') {
+           const sortedAxles = [...customAxles].map(a => ({
+               ...a,
+               offset: parseFloat(a.offset) || 0,
+               P: parseFloat(a.P) || 0
+           })).sort((a, b) => a.offset - b.offset);
+           return {
+              name: 'Custom User Vehicle',
+              UDL: parseFloat(customUDL) || 0,
+              axles: sortedAxles,
+              configurations: [sortedAxles]
+           };
+        }
+
+        const baseDef = LOAD_CATEGORIES[selectedCategory][selectedLoad];
+        let configurations = [];
+
+        let currentAxles = [...baseDef.axles];
+        let currentUDL = baseDef.UDL;
+
+        if (selectedCategory === 'AS 5100' && (selectedLoad === 'M1600' || selectedLoad === 'S1600')) {
+           const s = Math.max(6.25, parseFloat(m1600Spacing) || 6.25);
+           const P = selectedLoad === 'M1600' ? 120 : 80;
+           currentAxles = [
+             { offset: 0.0, P }, { offset: 1.25, P }, { offset: 2.5, P },
+             { offset: 7.5, P }, { offset: 8.75, P }, { offset: 10.0, P },
+             { offset: 10.0 + s, P }, { offset: 10.0 + s + 1.25, P }, { offset: 10.0 + s + 2.5, P },
+             { offset: 10.0 + s + 6.25, P }, { offset: 10.0 + s + 7.5, P }, { offset: 10.0 + s + 8.75, P }
+           ];
+        } else if (selectedCategory === 'MRWA Load Assessment') {
+           if (selectedLoad === 'Triaxle Axle Group') {
+               if (mrwaTriaxleModel === 'Model 1') {
+                   currentAxles = [{offset: 0, P: 90}, {offset: 1.2, P: 90}, {offset: 2.4, P: 90}];
+               } else {
+                   currentAxles = [{offset: 0, P: 180}, {offset: 1.8, P: 180}, {offset: 3.6, P: 180}];
+               }
+           } else if (selectedLoad === 'Standard Quad Axle Group') {
+               if (mrwaStdQuadModel === 'Model 1') {
+                   currentAxles = [{offset: 0, P: 90}, {offset: 1.2, P: 90}, {offset: 2.4, P: 90}, {offset: 3.6, P: 90}];
+               } else {
+                   currentAxles = [{offset: 0, P: 180}, {offset: 1.2, P: 180}, {offset: 2.4, P: 180}, {offset: 3.6, P: 180}];
+               }
+           } else if (selectedLoad === '484 Quad Axle Group') {
+               if (mrwa484QuadModel === 'Model 1') {
+                   currentAxles = [{offset: 0, P: 90}, {offset: 1.2, P: 90}, {offset: 3.6, P: 90}, {offset: 4.8, P: 90}];
+               } else {
+                   currentAxles = [{offset: 0, P: 180}, {offset: 1.2, P: 180}, {offset: 3.6, P: 180}, {offset: 4.8, P: 180}];
+               }
+           } else if (selectedLoad === 'Special Multiple Axle Vehicle') {
+               const s = parseFloat(mrwaSmaSpacing) || 1.55;
+               const P = mrwaSmaModel === 'Models 1 & 2' ? 180 : (mrwaSmaModel === 'Models 3 & 4' ? 270 : 360);
+               currentAxles = Array.from({length: 8}, (_, i) => ({ offset: i * s, P }));
+           }
+        } else if (selectedCategory === 'Austroads') {
+           if (selectedLoad === 'T44') {
+              const s = Math.min(8.0, Math.max(3.0, parseFloat(t44Spacing) || 3.0));
+              currentAxles = [
+                { offset: 0, P: 48 },
+                { offset: 3.7, P: 96 },
+                { offset: 4.9, P: 96 },
+                { offset: 4.9 + s, P: 96 },
+                { offset: 4.9 + s + 1.2, P: 96 }
+              ];
+           } else if (selectedLoad === 'L44') {
+              currentAxles = [{ offset: 0, P: l44AxleMode === 'shear' ? 154 : 106 }];
+           }
+        } else if (selectedCategory === 'NAASRA 1970' && (selectedLoad === 'HS20' || selectedLoad === 'HS15')) {
+           const s = Math.min(9.144, Math.max(4.2672, parseFloat(naasraSpacing) || 4.2672));
+           const P1 = selectedLoad === 'HS20' ? 35.5857728 : 26.6893296;
+           const P2 = selectedLoad === 'HS20' ? 142.3430912 : 106.7573184;
+           currentAxles = [
+             { offset: 0, P: P1 },
+             { offset: 4.2672, P: P2 },
+             { offset: 4.2672 + s, P: P2 }
+           ];
+        } else if (selectedLoad === 'RAIL') {
+          const baseLoad = parseFloat(railLoad) || 300;
+          const leadingLoad = baseLoad * 1.2;
+          const s = Math.min(20.0, Math.max(12.0, parseFloat(railSpacing) || 12.0));
+
+          currentAxles = [
+            { offset: 0.0, P: leadingLoad }
+          ];
+
+          let groupCenter = 4.25;
+          while (groupCenter - 2.25 < L_total + 30) {
+            currentAxles.push({ offset: groupCenter - 2.25, P: baseLoad });
+            currentAxles.push({ offset: groupCenter - 0.55, P: baseLoad });
+            currentAxles.push({ offset: groupCenter + 0.55, P: baseLoad });
+            currentAxles.push({ offset: groupCenter + 2.25, P: baseLoad });
+            groupCenter += s;
+          }
+        }
+
+        configurations = [currentAxles];
+
+        return { ...baseDef, axles: currentAxles, UDL: currentUDL, configurations };
+      }, [selectedCategory, selectedLoad, spans, railLoad, customAxles, customUDL, t44Spacing, l44AxleMode, m1600Spacing, railSpacing, mrwaTriaxleModel, mrwaStdQuadModel, mrwa484QuadModel, mrwaSmaModel, mrwaSmaSpacing, naasraSpacing]);
+
+      const loadFactors = useMemo(() => {
+        let ulsFactor = 1.0;
+        if (includeULS) {
+            ulsFactor = (selectedCategory === 'Custom' || ulsMode === 'custom') ? (parseFloat(customUlsVal) || 0) : defaultFactors.uls;
+        }
+
+        let appliedDla = 0;
+        if (includeDLA) {
+            appliedDla = (selectedCategory === 'Custom' || dlaMode === 'custom') ? (parseFloat(customDlaVal) || 0) : defaultFactors.dla;
+        }
+        
+        return {
+           totalAxleFactor: ulsFactor * (1.0 + appliedDla),
+           totalUdlFactor: ulsFactor * 1.0
+        };
+      }, [includeDLA, includeULS, selectedCategory, dlaMode, customDlaVal, ulsMode, customUlsVal, defaultFactors]);
+
+      const scaledConfigs = useMemo(() => {
+         const forwardConfigs = loadDef.configurations.map(c => c.map(a => ({ offset: a.offset, P: a.P * loadFactors.totalAxleFactor })));
+         
+         const backwardConfigs = forwardConfigs.map(c => {
+             if (c.length === 0) return [];
+             const maxOffset = c[c.length - 1].offset;
+             return c.map(a => ({ offset: maxOffset - a.offset, P: a.P })).sort((a,b) => a.offset - b.offset);
+         });
+
+         return { forwardConfigs, backwardConfigs, allConfigs: [...forwardConfigs, ...backwardConfigs] };
+      }, [loadDef.configurations, loadFactors.totalAxleFactor]);
+
+      useEffect(() => {
+        const L_total = spans.reduce((a, b) => a + b, 0);
+        const nSpans = spans.length;
+        const nNodes = nSpans + 1;
+
+        let spanStarts = [0];
+        let cx = 0;
+        for (const s of spans) { cx += s; spanStarts.push(cx); }
+
+        // Systematic grid for highest precision envelope scanning
+        const fineXSet = new Set();
+        for (let x = 0; x <= L_total + 1e-5; x += 0.025) fineXSet.add(Number(x.toFixed(4)));
+        
+        spanStarts.forEach(s => {
+          fineXSet.add(Number(s.toFixed(4)));
+          fineXSet.add(Number((s - 1e-5).toFixed(5)));
+          fineXSet.add(Number((s + 1e-5).toFixed(5)));
+        });
+        const fineXPoints = Array.from(fineXSet).sort((a, b) => a - b);
+
+        const fineMaxM = new Float64Array(fineXPoints.length).fill(0);
+        const fineMinM = new Float64Array(fineXPoints.length).fill(0);
+        const fineMaxV = new Float64Array(fineXPoints.length).fill(0);
+        const fineMinV = new Float64Array(fineXPoints.length).fill(0);
+        const maxR = new Array(nNodes).fill(0);
+        const minR = new Array(nNodes).fill(0);
+
+        const stepSize = 0.05;
+        let maxTruckLength = 0;
+        const criticalPositions = new Set();
+
+        for (const config of scaledConfigs.allConfigs) {
+          const truckLength = config.length > 0 ? config[config.length - 1].offset : 0;
+          maxTruckLength = Math.max(maxTruckLength, truckLength);
+          
+          for (let rawPos = -truckLength; rawPos <= L_total + truckLength + 1e-4; rawPos += stepSize) {
+            criticalPositions.add(Math.round(rawPos * 1000) / 1000);
+          }
+          
+          config.forEach(axle => {
+              spanStarts.forEach(s => {
+                  criticalPositions.add(Number((s + axle.offset).toFixed(3)));
+                  criticalPositions.add(Number((s + axle.offset - 1e-5).toFixed(5)));
+                  criticalPositions.add(Number((s + axle.offset + 1e-5).toFixed(5)));
+              });
+          });
+        }
+        
+        const posArray = Array.from(criticalPositions).sort((a, b) => a - b);
+        const scaledUDL = loadDef.UDL * loadFactors.totalUdlFactor;
+
+        // --- UDL Pattern Analysis ---
+        const udlMaxM = new Float64Array(fineXPoints.length).fill(0);
+        const udlMinM = new Float64Array(fineXPoints.length).fill(0);
+        const udlMaxV = new Float64Array(fineXPoints.length).fill(0);
+        const udlMinV = new Float64Array(fineXPoints.length).fill(0);
+        const udlMaxR = new Array(nNodes).fill(0);
+        const udlMinR = new Array(nNodes).fill(0);
+
+        if (scaledUDL !== 0) {
+            udlMaxM.fill(-Infinity); udlMinM.fill(Infinity);
+            udlMaxV.fill(-Infinity); udlMinV.fill(Infinity);
+            udlMaxR.fill(-Infinity); udlMinR.fill(Infinity);
+
+            const generateUDLPatterns = (n) => {
+                if (!patternUDL) return [new Array(n).fill(1)];
+                const patterns = [];
+                const total = 1 << n;
+                for (let i = 0; i < total; i++) {
+                    const pattern = [];
+                    for (let j = 0; j < n; j++) {
+                        pattern.push((i & (1 << j)) ? 1 : 0);
+                    }
+                    patterns.push(pattern);
+                }
+                return patterns;
+            };
+
+            const patterns = generateUDLPatterns(nSpans);
+            
+            for (const pattern of patterns) {
+                const udlArray = pattern.map(p => p * scaledUDL);
+                const state = analyzeBridgeState(spans, internalSupports, -1000, [], udlArray, fineXPoints);
+                for (let i = 0; i < fineXPoints.length; i++) {
+                    if (state.M[i] > udlMaxM[i]) udlMaxM[i] = state.M[i];
+                    if (state.M[i] < udlMinM[i]) udlMinM[i] = state.M[i];
+                    if (state.V[i] > udlMaxV[i]) udlMaxV[i] = state.V[i];
+                    if (state.V[i] < udlMinV[i]) udlMinV[i] = state.V[i];
+                }
+                for (let i = 0; i < nNodes; i++) {
+                    if (state.R[i] > udlMaxR[i]) udlMaxR[i] = state.R[i];
+                    if (state.R[i] < udlMinR[i]) udlMinR[i] = state.R[i];
+                }
+            }
+        }
+
+        // --- Axle Analysis ---
+        const axleMaxM = new Float64Array(fineXPoints.length).fill(0);
+        const axleMinM = new Float64Array(fineXPoints.length).fill(0);
+        const axleMaxV = new Float64Array(fineXPoints.length).fill(0);
+        const axleMinV = new Float64Array(fineXPoints.length).fill(0);
+        const axleMaxR = new Array(nNodes).fill(0);
+        const axleMinR = new Array(nNodes).fill(0);
+
+        const zeroUdlArray = new Array(nSpans).fill(0);
+        const hasAxles = scaledConfigs.allConfigs.some(c => c.length > 0);
+
+        if (hasAxles) {
+            axleMaxM.fill(-Infinity); axleMinM.fill(Infinity);
+            axleMaxV.fill(-Infinity); axleMinV.fill(Infinity);
+            axleMaxR.fill(-Infinity); axleMinR.fill(Infinity);
+
+            for (const config of scaledConfigs.allConfigs) {
+              if (config.length === 0) continue;
+              for (let pIdx = 0; pIdx < posArray.length; pIdx++) {
+                const pos = posArray[pIdx];
+                const state = analyzeBridgeState(spans, internalSupports, pos, config, zeroUdlArray, fineXPoints);
+                
+                for (let i = 0; i < fineXPoints.length; i++) {
+                  if (state.M[i] > axleMaxM[i]) axleMaxM[i] = state.M[i];
+                  if (state.M[i] < axleMinM[i]) axleMinM[i] = state.M[i];
+                  if (state.V[i] > axleMaxV[i]) axleMaxV[i] = state.V[i];
+                  if (state.V[i] < axleMinV[i]) axleMinV[i] = state.V[i];
+                }
+                for (let i = 0; i < nNodes; i++) {
+                  if (state.R[i] > axleMaxR[i]) axleMaxR[i] = state.R[i];
+                  if (state.R[i] < axleMinR[i]) axleMinR[i] = state.R[i];
+                }
+              }
+            }
+        }
+
+        // --- Combine Envelopes ---
+        for (let i = 0; i < fineXPoints.length; i++) {
+            fineMaxM[i] = (hasAxles && axleMaxM[i] !== -Infinity ? axleMaxM[i] : 0) + (scaledUDL !== 0 && udlMaxM[i] !== -Infinity ? udlMaxM[i] : 0);
+            fineMinM[i] = (hasAxles && axleMinM[i] !== Infinity ? axleMinM[i] : 0) + (scaledUDL !== 0 && udlMinM[i] !== Infinity ? udlMinM[i] : 0);
+            fineMaxV[i] = (hasAxles && axleMaxV[i] !== -Infinity ? axleMaxV[i] : 0) + (scaledUDL !== 0 && udlMaxV[i] !== -Infinity ? udlMaxV[i] : 0);
+            fineMinV[i] = (hasAxles && axleMinV[i] !== Infinity ? axleMinV[i] : 0) + (scaledUDL !== 0 && udlMinV[i] !== Infinity ? udlMinV[i] : 0);
+        }
+        for (let i = 0; i < nNodes; i++) {
+            maxR[i] = (hasAxles && axleMaxR[i] !== -Infinity ? axleMaxR[i] : 0) + (scaledUDL !== 0 && udlMaxR[i] !== -Infinity ? udlMaxR[i] : 0);
+            minR[i] = (hasAxles && axleMinR[i] !== Infinity ? axleMinR[i] : 0) + (scaledUDL !== 0 && udlMinR[i] !== Infinity ? udlMinR[i] : 0);
+        }
+
+        setSimulationData({
+          fineXPoints,
+          fineMaxM, fineMinM, fineMaxV, fineMinV,
+          maxReactions: maxR,
+          minReactions: minR,
+          L_total,
+          truckLength: maxTruckLength,
+          maxAxleP: Math.max(...scaledConfigs.allConfigs.flatMap(c => c.map(a => a.P))),
+          activeScaledUDL: scaledUDL
+        });
+        
+        setSliderPos(prev => {
+            const maxPos = L_total + maxTruckLength;
+            return prev > maxPos ? Math.round(maxPos * 100) / 100 : prev;
+        });
+
+      }, [spans, internalSupports, loadDef, scaledConfigs, loadFactors.totalUdlFactor, patternUDL]);
+
+      const spanStarts = useMemo(() => {
+        let cx = 0;
+        const starts = [0];
+        for (const s of spans) {
+          cx += s;
+          starts.push(cx);
+        }
+        return starts;
+      }, [spans]);
+
+      const chartData = useMemo(() => {
+        if (!simulationData.fineXPoints || simulationData.fineXPoints.length === 0) return [];
+        
+        const configToUse = direction === 'forward' 
+           ? scaledConfigs.forwardConfigs[0] 
+           : scaledConfigs.backwardConfigs[0];
+        
+        const gridX = new Set();
+        for (let x = 0; x <= simulationData.L_total + 1e-5; x += 0.05) gridX.add(Number(x.toFixed(4)));
+        spanStarts.forEach(s => gridX.add(Number(s.toFixed(4))));
+        
+        configToUse.forEach(axle => {
+          const ax = sliderPos - axle.offset;
+          if (ax >= 0 && ax <= simulationData.L_total) {
+            gridX.add(Number(ax.toFixed(4)));
+          }
+        });
+
+        const sortedRenderX = Array.from(gridX).sort((a, b) => a - b);
+          
+        const evalPoints = [];
+        sortedRenderX.forEach(x => {
+            const isSupport = spanStarts.some(s => Math.abs(s - x) < 1e-3);
+            const isAxle = configToUse.some(a => Math.abs((sliderPos - a.offset) - x) < 1e-3);
+            
+            if (isSupport || isAxle) {
+                evalPoints.push({ renderX: x, evalX: Number((x - 1e-5).toFixed(5)) });
+                evalPoints.push({ renderX: x, evalX: Number((x + 1e-5).toFixed(5)) });
+            } else {
+                evalPoints.push({ renderX: x, evalX: x });
+            }
+        });
+
+        const currentUdlArray = spans.map((_, i) => (instantUdlPattern[i] !== false ? simulationData.activeScaledUDL : 0));
+        const state = analyzeBridgeState(spans, internalSupports, sliderPos, configToUse, currentUdlArray, evalPoints.map(p => p.evalX));
+        
+        return evalPoints.map((pt, i) => {
+           let fineIdx = 0;
+           let minDist = Infinity;
+           
+           for (let j = 0; j < simulationData.fineXPoints.length; j++) {
+               const d = Math.abs(simulationData.fineXPoints[j] - pt.evalX);
+               if (d < minDist) { minDist = d; fineIdx = j; }
+           }
+           
+           let curM = state.M[i];
+           let curV = state.V[i];
+           let maxM = simulationData.fineMaxM[fineIdx] === -Infinity ? 0 : simulationData.fineMaxM[fineIdx];
+           let minM = simulationData.fineMinM[fineIdx] === Infinity ? 0 : simulationData.fineMinM[fineIdx];
+           let maxV = simulationData.fineMaxV[fineIdx] === -Infinity ? 0 : simulationData.fineMaxV[fineIdx];
+           let minV = simulationData.fineMinV[fineIdx] === Infinity ? 0 : simulationData.fineMinV[fineIdx];
+           
+           const supportIdx = spanStarts.findIndex(s => Math.abs(pt.renderX - s) < 1e-3);
+           if (supportIdx !== -1) {
+              const isPinned = supportIdx === 0 || supportIdx === spanStarts.length - 1 || !internalSupports[supportIdx - 1];
+              if (isPinned) {
+                  curM = 0;
+                  maxM = 0;
+                  minM = 0;
+              }
+           }
+
+           if (Math.abs(curM) < 1e-5) curM = 0;
+           if (Math.abs(curV) < 1e-5) curV = 0;
+           if (Math.abs(maxM) < 1e-5) maxM = 0;
+           if (Math.abs(minM) < 1e-5) minM = 0;
+           if (Math.abs(maxV) < 1e-5) maxV = 0;
+           if (Math.abs(minV) < 1e-5) minV = 0;
+
+           return {
+             x: pt.renderX,
+             curM, curV,
+             maxM, minM, maxV, minV,
+             maxM_shade: [Math.max(0, minM), Math.max(0, maxM)],
+             minM_shade: [Math.min(0, maxM), Math.min(0, minM)],
+             maxV_shade: [Math.max(0, minV), Math.max(0, maxV)],
+             minV_shade: [Math.min(0, maxV), Math.min(0, minV)]
+           };
+        });
+      }, [simulationData, sliderPos, direction, scaledConfigs, spans, internalSupports, spanStarts, instantUdlPattern]);
+
+      // Compute Peak Labels disconnected from sliding chart rendering
+      const peakLabels = useMemo(() => {
+        if (!simulationData.fineXPoints || simulationData.fineXPoints.length === 0) return { M: [], V: [] };
+        const mLabels = [];
+        const vLabels = [];
+        
+        const addLabel = (arr, x, y, pos, type) => {
+          const existingIdx = arr.findIndex(p => Math.abs(p.x - x) < 1e-3 && p.type === type);
+          if (existingIdx !== -1) {
+            if ((type === 'max' && y > arr[existingIdx].y) || (type === 'min' && y < arr[existingIdx].y)) {
+              arr[existingIdx] = { x, y, pos, type };
+            }
+          } else {
+            arr.push({ x, y, pos, type });
+          }
+        };
+
+        // Calculate peaks strictly within span limits to avoid slope artifacts near supports
+        for (let i = 0; i < spans.length; i++) {
+          const startX = spanStarts[i];
+          const endX = spanStarts[i + 1];
+          const margin = Math.min(0.5, (endX - startX) * 0.15); // Exclusion zone to prevent picking up support scallops
+          
+          let spanMaxM = -Infinity, spanMaxMx = null;
+          let spanMinM = Infinity, spanMinMx = null;
+
+          for (let j = 1; j < simulationData.fineXPoints.length - 1; j++) {
+            const x = simulationData.fineXPoints[j];
+            if (x > startX + margin && x < endX - margin) {
+               const maxVal = simulationData.fineMaxM[j];
+               if (maxVal >= simulationData.fineMaxM[j-1] && maxVal >= simulationData.fineMaxM[j+1]) {
+                   if (maxVal > spanMaxM) { spanMaxM = maxVal; spanMaxMx = x; }
+               }
+               const minVal = simulationData.fineMinM[j];
+               if (minVal <= simulationData.fineMinM[j-1] && minVal <= simulationData.fineMinM[j+1]) {
+                   if (minVal < spanMinM) { spanMinM = minVal; spanMinMx = x; }
+               }
+            }
+          }
+          
+          if (spanMaxMx !== null && Math.abs(spanMaxM) > 0.1) addLabel(mLabels, spanMaxMx, spanMaxM, 'bottom', 'max');
+          if (spanMinMx !== null && Math.abs(spanMinM) > 0.1) addLabel(mLabels, spanMinMx, spanMinM, 'top', 'min');
+        }
+
+        // Evaluate absolute conditions strictly at the supports
+        spanStarts.forEach((s) => {
+            let sMaxM = -Infinity, sMinM = Infinity;
+            let sMaxV = -Infinity, sMinV = Infinity;
+            
+            for (let j = 0; j < simulationData.fineXPoints.length; j++) {
+                const x = simulationData.fineXPoints[j];
+                if (Math.abs(x - s) < 1e-3) {
+                    if (simulationData.fineMaxM[j] > sMaxM) sMaxM = simulationData.fineMaxM[j];
+                    if (simulationData.fineMinM[j] < sMinM) sMinM = simulationData.fineMinM[j];
+                    if (simulationData.fineMaxV[j] > sMaxV) sMaxV = simulationData.fineMaxV[j];
+                    if (simulationData.fineMinV[j] < sMinV) sMinV = simulationData.fineMinV[j];
+                }
+            }
+            
+            const supportIdx = spanStarts.findIndex(pos => Math.abs(s - pos) < 1e-3);
+            const isPinned = supportIdx === 0 || supportIdx === spanStarts.length - 1 || !internalSupports[supportIdx - 1];
+            if (isPinned) {
+                sMaxM = 0;
+                sMinM = 0;
+            }
+            
+            if (Math.abs(sMaxM) < 0.1 && Math.abs(sMinM) < 0.1) {
+                addLabel(mLabels, s, 0.0, 'bottom', 'zero');
+            } else {
+                if (Math.abs(sMaxM) >= 0.1) addLabel(mLabels, s, sMaxM, 'bottom', 'max');
+                if (Math.abs(sMinM) >= 0.1) addLabel(mLabels, s, sMinM, 'top', 'min');
+            }
+            
+            if (Math.abs(sMaxV) < 0.1 && Math.abs(sMinV) < 0.1) {
+                addLabel(vLabels, s, 0.0, 'bottom', 'zero');
+            } else {
+                if (Math.abs(sMaxV) >= 0.1) addLabel(vLabels, s, sMaxV, 'top', 'max');
+                if (Math.abs(sMinV) >= 0.1) addLabel(vLabels, s, sMinV, 'bottom', 'min');
+            }
+        });
+
+        return { M: mLabels, V: vLabels };
+      }, [simulationData, spans, spanStarts, internalSupports]);
+
+      const currentStateForTable = useMemo(() => {
+        const configToUse = direction === 'forward' 
+           ? scaledConfigs.forwardConfigs[0] 
+           : scaledConfigs.backwardConfigs[0];
+        const currentUdlArray = spans.map((_, i) => (instantUdlPattern[i] !== false ? simulationData.activeScaledUDL : 0));
+        return analyzeBridgeState(spans, internalSupports, sliderPos, configToUse, currentUdlArray, spanStarts);
+      }, [spans, internalSupports, sliderPos, direction, scaledConfigs, spanStarts, simulationData.activeScaledUDL, instantUdlPattern]);
+
+      const chartAxes = useMemo(() => {
+        if (!chartData || chartData.length === 0) return { mTicks: [], vTicks: [], xTicks: [], mDomain: [0,0], vDomain: [0,0] };
+        
+        let minM = Infinity, maxM = -Infinity;
+        let minV = Infinity, maxV = -Infinity;
+        
+        chartData.forEach(env => {
+          if (env.minM < minM) minM = env.minM;
+          if (env.maxM > maxM) maxM = env.maxM;
+          if (env.minV < minV) minV = env.minV;
+          if (env.maxV > maxV) maxV = env.maxV;
+        });
+
+        const getBuffered = (min, max) => {
+           const range = max - min || 10;
+           return [min - range * 0.15, max + range * 0.15];
+        };
+
+        const [bMinM, bMaxM] = getBuffered(minM, maxM);
+        const [bMinV, bMaxV] = getBuffered(minV, maxV);
+
+        const mTicks = getNiceTicks(bMinM, bMaxM, 7);
+        const vTicks = getNiceTicks(bMinV, bMaxV, 7);
+
+        const roughXStep = simulationData.L_total / 8;
+        const mag = Math.pow(10, Math.floor(Math.log10(roughXStep || 1)));
+        const normX = roughXStep / mag;
+        let stepX;
+        
+        if (normX <= 1.5) stepX = 1 * mag;
+        else if (normX <= 3) stepX = 2 * mag;
+        else if (normX <= 7) stepX = 5 * mag;
+        else stepX = 10 * mag;
+
+        const xTicks = [];
+        for (let x = 0; x <= simulationData.L_total + 1e-5; x += stepX) {
+           xTicks.push(Number(x.toFixed(3)));
+        }
+        if (Math.abs(simulationData.L_total - xTicks[xTicks.length - 1]) > stepX * 0.2) {
+           xTicks.push(Number(simulationData.L_total.toFixed(3)));
+        }
+        const uniqueXTicks = Array.from(new Set(xTicks)).sort((a,b) => a - b);
+
+        return {
+           mTicks,
+           vTicks,
+           xTicks: uniqueXTicks,
+           mDomain: [mTicks[0], mTicks[mTicks.length - 1]],
+           vDomain: [vTicks[0], vTicks[vTicks.length - 1]]
+        };
+      }, [chartData, simulationData.L_total]);
+
+      const formatNum = (num) => {
+        if (num == null) return '0.0';
+        if (Math.abs(num) < 0.01) return '0.0';
+        const str = Number(num).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        return str.replace(/-/g, '\u2212');
+      };
+      
+      const formatAxleLoad = (num) => {
+        return Number(num).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      };
+
+      const formatPos = (num) => {
+        if (num == null) return '0.00';
+        const val = Number(num);
+        if (isNaN(val)) return '0.00';
+        if (Math.abs(val) < 1e-4) return '0.00';
+        return val.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+
+      const formatSpanPos = (num) => {
+        if (num == null) return '0.0';
+        const val = Number(num);
+        if (isNaN(val)) return '0.0';
+        if (Math.abs(val) < 1e-4) return '0.0';
+        return val.toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      };
+
+      const formatYTick = (num) => {
+        if (num == null) return '0';
+        if (Math.abs(num) < 0.5) return '0';
+        return Math.round(num).toLocaleString('en-AU').replace(/-/g, '\u2212');
+      };
+
+      const formatXTick = (num) => {
+        if (num == null) return '0';
+        return Number(num).toFixed(1).replace(/\.0$/, '');
+      };
+
+      const formatDLA = (num) => {
+        if (num == null) return '0.00';
+        return Number(num).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+
+      const formatULS = (num) => {
+        if (num == null) return '0.0';
+        return Number(num).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      };
+
+      const toggleSupport = (idx) => {
+        setInternalSupports(prev => {
+          const next = [...prev];
+          next[idx] = !next[idx];
+          return next;
+        });
+      };
+
+      const handleSliderStep = (increment) => {
+        setSliderPos(prev => {
+          let nextPos = prev + increment;
+          nextPos = Math.max(0, Math.min(simulationData.L_total + simulationData.truckLength, nextPos));
+          return Math.round(nextPos * 100) / 100;
+        });
+      };
+
+      const CustomTooltipM = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+          const pts = chartData.filter(p => Math.abs(p.x - Number(label)) < 1e-4);
+          let sMaxM = -Infinity, sMinM = Infinity, sCurM = 0;
+          if (pts.length > 0) {
+             sCurM = pts[0].curM;
+             pts.forEach(p => {
+               if (p.maxM > sMaxM) sMaxM = p.maxM;
+               if (p.minM < sMinM) sMinM = p.minM;
+               if (Math.abs(p.curM) > Math.abs(sCurM)) sCurM = p.curM;
+             });
+             
+             return (
+                <div className="bg-white p-3 border border-slate-200 shadow-md rounded-lg text-sm">
+                  <div className="font-semibold text-slate-700 mb-2">Position: {formatPos(label)} m</div>
+                  <div className="text-blue-500 mb-1">Max Envelope (𝑀): {formatNum(sMaxM)}</div>
+                  <div className="text-red-500 mb-1">Min Envelope (𝑀): {formatNum(sMinM)}</div>
+                  <div className="text-slate-800">Instantaneous 𝑀: {formatNum(sCurM)}</div>
+                </div>
+             );
+          }
+        }
+        return null;
+      };
+
+      const CustomTooltipV = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+          const pts = chartData.filter(p => Math.abs(p.x - Number(label)) < 1e-4);
+          let sMaxV = -Infinity, sMinV = Infinity, sCurV = 0;
+          if (pts.length > 0) {
+             sCurV = pts[0].curV;
+             pts.forEach(p => {
+               if (p.maxV > sMaxV) sMaxV = p.maxV;
+               if (p.minV < sMinV) sMinV = p.minV;
+               if (Math.abs(p.curV) > Math.abs(sCurV)) sCurV = p.curV;
+             });
+             
+             return (
+                <div className="bg-white p-3 border border-slate-200 shadow-md rounded-lg text-sm">
+                  <div className="font-semibold text-slate-700 mb-2">Position: {formatPos(label)} m</div>
+                  <div className="text-blue-500 mb-1">Max Envelope (𝑉): {formatNum(sMaxV)}</div>
+                  <div className="text-red-500 mb-1">Min Envelope (𝑉): {formatNum(sMinV)}</div>
+                  <div className="text-slate-800">Instantaneous 𝑉: {formatNum(sCurV)}</div>
+                </div>
+             );
+          }
+        }
+        return null;
+      };
+
+      const chartMargin = { top: 15, right: 30, left: 10, bottom: 15 };
+      const yAxisWidth = 65;
+      const paddingLeft = chartMargin.left + yAxisWidth;
+      const paddingRight = chartMargin.right;
+
+      return (
+        <div className="h-screen bg-gray-50 text-slate-800 p-3 font-sans flex flex-col overflow-hidden">
+          <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 min-h-0 space-y-3">
+            
+            <header className="shrink-0 px-2 flex items-baseline space-x-3">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bridge1D</h1>
+              <span className="text-sm text-slate-500 font-medium">Created by Angus Murray</span>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0">
+              
+              {/* CONTROL PANEL */}
+              <div className="lg:col-span-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200 overflow-y-auto">
+                <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-2 mb-3">Parameters</h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Span Lengths (m)</label>
+                    <input 
+                      type="text" 
+                      value={spansInput} 
+                      onChange={handleSpanChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g. 15, 20, 15"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Live Load</label>
+                    <select 
+                      value={selectedCategory} 
+                      onChange={handleCategoryChange}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white mb-2"
+                    >
+                      {CATEGORY_ORDER.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+
+                    {selectedCategory !== 'Custom' && (
+                      <select 
+                        value={selectedLoad} 
+                        onChange={handleLoadChange}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        {Object.entries(LOAD_CATEGORIES[selectedCategory])
+                          .sort(([keyA], [keyB]) => {
+                            if (selectedCategory === 'AS 5100') {
+                              return AS5100_ORDER.indexOf(keyA) - AS5100_ORDER.indexOf(keyB);
+                            }
+                            if (selectedCategory === 'MRWA Load Assessment') {
+                              return MRWA_ORDER.indexOf(keyA) - MRWA_ORDER.indexOf(keyB);
+                            }
+                            if (selectedCategory === 'NAASRA 1970') {
+                              return NAASRA_ORDER.indexOf(keyA) - NAASRA_ORDER.indexOf(keyB);
+                            }
+                            return keyA.localeCompare(keyB);
+                          })
+                          .map(([key, val]) => (
+                          <option key={key} value={key}>{val.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {selectedCategory === 'AS 5100' && (selectedLoad === 'M1600' || selectedLoad === 'S1600') && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Variable Axle Spacing (m)</label>
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onMouseDown={() => startPress(() => setM1600Spacing(prev => stepToNearest(prev, -1, 0.1, 6.25, 1)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setM1600Spacing(prev => stepToNearest(prev, -1, 0.1, 6.25, 1)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          −
+                        </button>
+                        <input 
+                          type="text" 
+                          value={m1600Spacing} 
+                          onChange={e => {
+                              let valStr = e.target.value;
+                              if (valStr === '') { setM1600Spacing(''); return; }
+                              setM1600Spacing(valStr);
+                          }} 
+                          onBlur={e => {
+                              let val = parseFloat(e.target.value);
+                              if (isNaN(val) || val < 6.25) val = 6.25;
+                              setM1600Spacing(enforceMinDecimals(val, 1));
+                          }}
+                          onKeyDown={(e) => {
+                             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                 e.preventDefault();
+                                 setM1600Spacing(stepToNearest(m1600Spacing, e.key === 'ArrowUp' ? 1 : -1, 0.1, 6.25, 1));
+                             }
+                          }}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                        />
+                        <button 
+                          onMouseDown={() => startPress(() => setM1600Spacing(prev => stepToNearest(prev, 1, 0.1, 6.25, 1)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setM1600Spacing(prev => stepToNearest(prev, 1, 0.1, 6.25, 1)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 text-center">Minimum: 6.25 m</p>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'Austroads' && selectedLoad === 'T44' && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Variable Axle Spacing (m)</label>
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onMouseDown={() => startPress(() => setT44Spacing(prev => stepToNearest(prev, -1, 0.1, 3.0, 1, 8.0)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setT44Spacing(prev => stepToNearest(prev, -1, 0.1, 3.0, 1, 8.0)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          −
+                        </button>
+                        <input 
+                          type="text" 
+                          value={t44Spacing} 
+                          onChange={e => {
+                              let valStr = e.target.value;
+                              if (valStr === '') { setT44Spacing(''); return; }
+                              setT44Spacing(valStr);
+                          }} 
+                          onBlur={e => {
+                              let val = parseFloat(e.target.value);
+                              if (isNaN(val) || val < 3.0) val = 3.0;
+                              else if (val > 8.0) val = 8.0;
+                              setT44Spacing(enforceMinDecimals(val, 1));
+                          }}
+                          onKeyDown={(e) => {
+                             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                 e.preventDefault();
+                                 setT44Spacing(stepToNearest(t44Spacing, e.key === 'ArrowUp' ? 1 : -1, 0.1, 3.0, 1, 8.0));
+                             }
+                          }}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                        />
+                        <button 
+                          onMouseDown={() => startPress(() => setT44Spacing(prev => stepToNearest(prev, 1, 0.1, 3.0, 1, 8.0)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setT44Spacing(prev => stepToNearest(prev, 1, 0.1, 3.0, 1, 8.0)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 text-center">Range: 3.0 m to 8.0 m</p>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'Austroads' && selectedLoad === 'L44' && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">L44 Axle Load Type</label>
+                      <select 
+                        value={l44AxleMode} 
+                        onChange={e => setL44AxleMode(e.target.value)} 
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      >
+                        <option value="bending">106 kN (Bending)</option>
+                        <option value="shear">154 kN (Shear)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'NAASRA 1970' && (selectedLoad === 'HS20' || selectedLoad === 'HS15') && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Variable Axle Spacing (m)</label>
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onMouseDown={() => startPress(() => setNaasraSpacing(prev => stepToNearest(prev, -1, 0.1, 4.2672, 1, 9.144)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setNaasraSpacing(prev => stepToNearest(prev, -1, 0.1, 4.2672, 1, 9.144)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          −
+                        </button>
+                        <input 
+                          type="text" 
+                          value={naasraSpacing} 
+                          onChange={e => {
+                              let valStr = e.target.value;
+                              if (valStr === '') { setNaasraSpacing(''); return; }
+                              setNaasraSpacing(valStr);
+                          }} 
+                          onBlur={e => {
+                              let val = parseFloat(e.target.value);
+                              if (isNaN(val) || val < 4.2672) val = 4.2672;
+                              else if (val > 9.144) val = 9.144;
+                              setNaasraSpacing(enforceMinDecimals(val, 1));
+                          }}
+                          onKeyDown={(e) => {
+                             if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                 e.preventDefault();
+                                 setNaasraSpacing(stepToNearest(naasraSpacing, e.key === 'ArrowUp' ? 1 : -1, 0.1, 4.2672, 1, 9.144));
+                             }
+                          }}
+                          className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                        />
+                        <button 
+                          onMouseDown={() => startPress(() => setNaasraSpacing(prev => stepToNearest(prev, 1, 0.1, 4.2672, 1, 9.144)))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => setNaasraSpacing(prev => stepToNearest(prev, 1, 0.1, 4.2672, 1, 9.144)))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 text-center">Range: 4.2672 m to 9.144 m</p>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'MRWA Load Assessment' && selectedLoad === 'Triaxle Axle Group' && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Model Type</label>
+                      <select 
+                        value={mrwaTriaxleModel} 
+                        onChange={e => setMrwaTriaxleModel(e.target.value)} 
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      >
+                        <option value="Model 1">Model 1</option>
+                        <option value="Models 2 & 3">Models 2 & 3</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'MRWA Load Assessment' && selectedLoad === 'Standard Quad Axle Group' && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Model Type</label>
+                      <select 
+                        value={mrwaStdQuadModel} 
+                        onChange={e => setMrwaStdQuadModel(e.target.value)} 
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      >
+                        <option value="Model 1">Model 1</option>
+                        <option value="Models 2 & 3">Models 2 & 3</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'MRWA Load Assessment' && selectedLoad === '484 Quad Axle Group' && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Model Type</label>
+                      <select 
+                        value={mrwa484QuadModel} 
+                        onChange={e => setMrwa484QuadModel(e.target.value)} 
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                      >
+                        <option value="Model 1">Model 1</option>
+                        <option value="Models 2 & 3">Models 2 & 3</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {selectedCategory === 'MRWA Load Assessment' && selectedLoad === 'Special Multiple Axle Vehicle' && (
+                    <>
+                      <div className="mt-3 border-t border-slate-100 pt-3">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Model Type</label>
+                        <select 
+                          value={mrwaSmaModel} 
+                          onChange={e => setMrwaSmaModel(e.target.value)} 
+                          className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                        >
+                          <option value="Models 1 & 2">Models 1 & 2</option>
+                          <option value="Models 3 & 4">Models 3 & 4</option>
+                          <option value="Models 5 & 6">Models 5 & 6</option>
+                        </select>
+                      </div>
+                      <div className="mt-3 border-t border-slate-100 pt-3">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Variable Axle Spacing (m)</label>
+                        <select 
+                          value={mrwaSmaSpacing} 
+                          onChange={e => setMrwaSmaSpacing(e.target.value)} 
+                          className="w-full px-3 py-2 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                        >
+                          <option value="1.45">1.45</option>
+                          <option value="1.55">1.55</option>
+                          <option value="1.60">1.60</option>
+                          <option value="1.80">1.80</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {selectedCategory === 'Custom' && (
+                    <div className="space-y-3 mt-4 border-t border-slate-100 pt-3">
+                      <h3 className="text-sm font-medium text-slate-700">Custom Vehicle Definition</h3>
+                      
+                      <div>
+                        <label className="block text-xs text-slate-600 mb-1">UDL Component (kN/m)</label>
+                        <input 
+                          type="number" 
+                          value={customUDL} 
+                          onChange={e => setCustomUDL(e.target.value)} 
+                          onBlur={e => {
+                             let val = parseFloat(e.target.value);
+                             if (isNaN(val) || val < 0) val = 0;
+                             setCustomUDL(val);
+                          }}
+                          className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500" 
+                          min="0"
+                          step="1"
+                        />
+                      </div>
+
+                      <div>
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr>
+                              <th className="font-medium text-slate-600 pb-1">Offset (m)</th>
+                              <th className="font-medium text-slate-600 pb-1">Load (kN)</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {customAxles.map((axle, idx) => (
+                              <tr key={axle.id} className="border-b border-slate-100 last:border-0">
+                                <td className="py-1 pr-2">
+                                  <input 
+                                    type="number" 
+                                    value={axle.offset} 
+                                    disabled={idx === 0} 
+                                    onChange={(e) => updateCustomAxle(axle.id, 'offset', e.target.value)} 
+                                    onBlur={(e) => {
+                                       let val = parseFloat(e.target.value);
+                                       if (isNaN(val) || val < 0) val = 0;
+                                       updateCustomAxle(axle.id, 'offset', val);
+                                    }}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded disabled:bg-slate-100 focus:outline-none focus:border-blue-500" 
+                                    min="0" 
+                                    step="0.1" 
+                                  />
+                                </td>
+                                <td className="py-1 pr-2">
+                                  <input 
+                                    type="number" 
+                                    value={axle.P} 
+                                    onChange={(e) => updateCustomAxle(axle.id, 'P', e.target.value)} 
+                                    onBlur={(e) => {
+                                       let val = parseFloat(e.target.value);
+                                       if (isNaN(val) || val <= 0) val = 10;
+                                       updateCustomAxle(axle.id, 'P', val);
+                                    }}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded focus:outline-none focus:border-blue-500" 
+                                    min="0.1"
+                                    step="10"
+                                  />
+                                </td>
+                                <td className="py-1 text-right">
+                                  {idx > 0 && (
+                                    <button 
+                                      onClick={() => removeCustomAxle(axle.id)} 
+                                      className="text-red-500 hover:text-red-700 font-bold px-1"
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <button 
+                          onClick={addCustomAxle} 
+                          className="mt-2 text-xs text-blue-600 font-medium hover:text-blue-800"
+                        >
+                          + Add Axle
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedLoad === 'RAIL' && selectedCategory !== 'Custom' && (
+                    <>
+                      <div className="mt-3 border-t border-slate-100 pt-3">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Rail Load Base (LA)</label>
+                        <div className="flex items-center space-x-2">
+                          <button 
+                            onMouseDown={() => startPress(() => setRailLoad(prev => String(Math.max(1, (parseFloat(prev)||0) - 10))))}
+                            onMouseUp={stopPress}
+                            onMouseLeave={stopPress}
+                            onTouchStart={() => startPress(() => setRailLoad(prev => String(Math.max(1, (parseFloat(prev)||0) - 10))))}
+                            onTouchEnd={stopPress}
+                            className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          >
+                            −
+                          </button>
+                          <input 
+                            type="text" 
+                            value={railLoad} 
+                            onChange={e => {
+                                let valStr = e.target.value;
+                                if (valStr === '') { setRailLoad(''); return; }
+                                setRailLoad(valStr);
+                            }} 
+                            onBlur={e => {
+                                let val = parseFloat(e.target.value);
+                                if (isNaN(val) || val < 1) val = 1;
+                                setRailLoad(val.toString());
+                            }}
+                            onKeyDown={(e) => {
+                               if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                   e.preventDefault();
+                                   let current = parseFloat(railLoad) || 300;
+                                   let next = e.key === 'ArrowUp' ? current + 10 : current - 10;
+                                   if (next < 1) next = 1;
+                                   setRailLoad(next.toString());
+                               }
+                            }}
+                            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                          />
+                          <button 
+                            onMouseDown={() => startPress(() => setRailLoad(prev => String(Math.max(1, (parseFloat(prev)||0) + 10))))}
+                            onMouseUp={stopPress}
+                            onMouseLeave={stopPress}
+                            onTouchStart={() => startPress(() => setRailLoad(prev => String(Math.max(1, (parseFloat(prev)||0) + 10))))}
+                            onTouchEnd={stopPress}
+                            className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 border-t border-slate-100 pt-3">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Variable Axle Group Spacing (m)</label>
+                        <div className="flex items-center space-x-2">
+                          <button 
+                            onMouseDown={() => startPress(() => setRailSpacing(prev => stepToNearest(prev, -1, 0.1, 12.0, 1, 20.0)))}
+                            onMouseUp={stopPress}
+                            onMouseLeave={stopPress}
+                            onTouchStart={() => startPress(() => setRailSpacing(prev => stepToNearest(prev, -1, 0.1, 12.0, 1, 20.0)))}
+                            onTouchEnd={stopPress}
+                            className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          >
+                            −
+                          </button>
+                          <input 
+                            type="text" 
+                            value={railSpacing} 
+                            onChange={e => {
+                                let valStr = e.target.value;
+                                if (valStr === '') { setRailSpacing(''); return; }
+                                setRailSpacing(valStr);
+                            }} 
+                            onBlur={e => {
+                                let val = parseFloat(e.target.value);
+                                if (isNaN(val) || val < 12.0) val = 12.0;
+                                else if (val > 20.0) val = 20.0;
+                                setRailSpacing(enforceMinDecimals(val, 1));
+                            }}
+                            onKeyDown={(e) => {
+                               if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                   e.preventDefault();
+                                   setRailSpacing(stepToNearest(railSpacing, e.key === 'ArrowUp' ? 1 : -1, 0.1, 12.0, 1, 20.0));
+                               }
+                            }}
+                            className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                          />
+                          <button 
+                            onMouseDown={() => startPress(() => setRailSpacing(prev => stepToNearest(prev, 1, 0.1, 12.0, 1, 20.0)))}
+                            onMouseUp={stopPress}
+                            onMouseLeave={stopPress}
+                            onTouchStart={() => startPress(() => setRailSpacing(prev => stepToNearest(prev, 1, 0.1, 12.0, 1, 20.0)))}
+                            onTouchEnd={stopPress}
+                            className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 text-center">Range: 12.0 m to 20.0 m</p>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex flex-col gap-3 mt-3 pt-3 border-t border-slate-100">
+                    {loadDef.UDL > 0 && (
+                      <label className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer">
+                        <input 
+                           type="checkbox" 
+                           checked={patternUDL} 
+                           onChange={e => setPatternUDL(e.target.checked)} 
+                           className="rounded text-blue-600" 
+                        />
+                        <span>UDL Patterning for Envelopes</span>
+                      </label>
+                    )}
+
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer">
+                        <input 
+                           type="checkbox" 
+                           checked={includeDLA} 
+                           onChange={e => setIncludeDLA(e.target.checked)} 
+                           className="rounded text-blue-600" 
+                        />
+                        <span>Include DLA</span>
+                      </label>
+                      {includeDLA && (
+                        <div className="pl-6 pt-2 space-y-2">
+                          {selectedCategory === 'TMR Load Assessment' && (
+                            <div className="mb-2">
+                              <label className="block text-xs text-slate-500 mb-1">Travel Speed</label>
+                              <select 
+                                value={tmrSpeed} 
+                                onChange={e => setTmrSpeed(e.target.value)} 
+                                className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                              >
+                                <option value="Stationary">Stationary</option>
+                                <option value="<= 10 km/h">≤ 10 km/h</option>
+                                <option value="> 10 km/h">&gt; 10 km/h</option>
+                              </select>
+                            </div>
+                          )}
+                          {selectedCategory !== 'Custom' && (
+                            <select 
+                              value={dlaMode} 
+                              onChange={e => {
+                                  setDlaMode(e.target.value);
+                                  if (e.target.value === 'custom') {
+                                      setCustomDlaVal(enforceMinDecimals(defaultFactors.dla, 2));
+                                  }
+                              }} 
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                            >
+                              <option value="default">Default ({formatDLA(defaultFactors.dla)})</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          )}
+                          {selectedLoad === 'RAIL' && (
+                            <div className="text-xs text-slate-500 mt-1">Span-specific DLAs to be included in next version.</div>
+                          )}
+                          {(selectedCategory === 'Custom' || dlaMode === 'custom') && (
+                            <div className="mt-2">
+                              <label className="block text-xs text-slate-500 mb-1">Custom DLA</label>
+                              <div className="flex items-center space-x-2">
+                                <button 
+                                  onMouseDown={() => startPress(() => setCustomDlaVal(prev => stepToNearest(prev, -1, 0.05, 0.0, 2)))}
+                                  onMouseUp={stopPress}
+                                  onMouseLeave={stopPress}
+                                  onTouchStart={() => startPress(() => setCustomDlaVal(prev => stepToNearest(prev, -1, 0.05, 0.0, 2)))}
+                                  onTouchEnd={stopPress}
+                                  className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                                >−</button>
+                                <input 
+                                  type="text" 
+                                  value={customDlaVal} 
+                                  onChange={e => {
+                                      let valStr = e.target.value;
+                                      if (valStr === '') { setCustomDlaVal(''); return; }
+                                      setCustomDlaVal(valStr);
+                                  }} 
+                                  onBlur={e => {
+                                     let val = parseFloat(e.target.value);
+                                     if (isNaN(val) || val < 0) val = 0;
+                                     setCustomDlaVal(enforceMinDecimals(val, 2));
+                                  }}
+                                  onKeyDown={(e) => {
+                                     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                         e.preventDefault();
+                                         setCustomDlaVal(stepToNearest(customDlaVal, e.key === 'ArrowUp' ? 1 : -1, 0.05, 0.0, 2));
+                                     }
+                                  }}
+                                  className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                                />
+                                <button 
+                                  onMouseDown={() => startPress(() => setCustomDlaVal(prev => stepToNearest(prev, 1, 0.05, 0.0, 2)))}
+                                  onMouseUp={stopPress}
+                                  onMouseLeave={stopPress}
+                                  onTouchStart={() => startPress(() => setCustomDlaVal(prev => stepToNearest(prev, 1, 0.05, 0.0, 2)))}
+                                  onTouchEnd={stopPress}
+                                  className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                                >+</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer">
+                        <input 
+                           type="checkbox" 
+                           checked={includeULS} 
+                           onChange={e => setIncludeULS(e.target.checked)} 
+                           className="rounded text-blue-600" 
+                        />
+                        <span>Include ULS Factor</span>
+                      </label>
+                      {includeULS && (
+                        <div className="pl-6 pt-2 space-y-2">
+                          {selectedCategory !== 'Custom' && (
+                            <select 
+                              value={ulsMode} 
+                              onChange={e => {
+                                  setUlsMode(e.target.value);
+                                  if (e.target.value === 'custom') {
+                                      setCustomUlsVal(enforceMinDecimals(defaultFactors.uls, 1));
+                                  }
+                              }} 
+                              className="w-full px-2 py-1 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 bg-white"
+                            >
+                              <option value="default">Default ({formatULS(defaultFactors.uls)})</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          )}
+                          {(selectedCategory === 'Custom' || ulsMode === 'custom') && (
+                            <div className="mt-2">
+                              <label className="block text-xs text-slate-500 mb-1">Custom ULS Factor</label>
+                              <div className="flex items-center space-x-2">
+                                <button 
+                                  onMouseDown={() => startPress(() => setCustomUlsVal(prev => stepToNearest(prev, -1, 0.1, 1.0, 1)))}
+                                  onMouseUp={stopPress}
+                                  onMouseLeave={stopPress}
+                                  onTouchStart={() => startPress(() => setCustomUlsVal(prev => stepToNearest(prev, -1, 0.1, 1.0, 1)))}
+                                  onTouchEnd={stopPress}
+                                  className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                                >−</button>
+                                <input 
+                                  type="text" 
+                                  value={customUlsVal} 
+                                  onChange={e => {
+                                      let valStr = e.target.value;
+                                      if (valStr === '') { setCustomUlsVal(''); return; }
+                                      setCustomUlsVal(valStr);
+                                  }} 
+                                  onBlur={e => {
+                                     let val = parseFloat(e.target.value);
+                                     if (isNaN(val) || val < 1.0) val = 1.0;
+                                     setCustomUlsVal(enforceMinDecimals(val, 1));
+                                  }}
+                                  onKeyDown={(e) => {
+                                     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                         e.preventDefault();
+                                         setCustomUlsVal(stepToNearest(customUlsVal, e.key === 'ArrowUp' ? 1 : -1, 0.1, 1.0, 1));
+                                     }
+                                  }}
+                                  className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded focus:outline-none focus:border-blue-500 text-center" 
+                                />
+                                <button 
+                                  onMouseDown={() => startPress(() => setCustomUlsVal(prev => stepToNearest(prev, 1, 0.1, 1.0, 1)))}
+                                  onMouseUp={stopPress}
+                                  onMouseLeave={stopPress}
+                                  onTouchStart={() => startPress(() => setCustomUlsVal(prev => stepToNearest(prev, 1, 0.1, 1.0, 1)))}
+                                  onTouchEnd={stopPress}
+                                  className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                                >+</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 mt-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vehicle Position</label>
+                  <div className="flex flex-col gap-3">
+                     <div className="flex items-center space-x-2">
+                        <button 
+                          onMouseDown={() => startPress(() => handleSliderStep(-0.05))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => handleSliderStep(-0.05))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none touch-manipulation text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          title="Decrease by 0.05 m"
+                        >
+                          −
+                        </button>
+                        <span className="text-sm font-medium w-16 text-center text-slate-800 select-none">
+                          {formatPos(sliderPos)} m
+                        </span>
+                        <button 
+                          onMouseDown={() => startPress(() => handleSliderStep(0.05))}
+                          onMouseUp={stopPress}
+                          onMouseLeave={stopPress}
+                          onTouchStart={() => startPress(() => handleSliderStep(0.05))}
+                          onTouchEnd={stopPress}
+                          className="px-3 py-1 bg-slate-100 border border-slate-300 rounded text-slate-700 hover:bg-slate-200 active:bg-slate-300 focus:outline-none select-none touch-manipulation text-lg leading-none flex items-center justify-center min-w-[32px] font-bold"
+                          title="Increase by 0.05 m"
+                        >
+                          +
+                        </button>
+                     </div>
+                     <input 
+                        type="range" 
+                        min={0} 
+                        max={simulationData.L_total + simulationData.truckLength} 
+                        step={0.05} 
+                        value={sliderPos} 
+                        onChange={(e) => setSliderPos(parseFloat(e.target.value))}
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                     />
+                     <div className="flex justify-start">
+                       <select 
+                          value={direction} 
+                          onChange={e => setDirection(e.target.value)} 
+                          className="text-xs border border-slate-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                       >
+                          <option value="forward">Direction: Forward</option>
+                          <option value="backward">Direction: Backward</option>
+                       </select>
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* VISUALISATION AND RESULTS */}
+              <div className="lg:col-span-9 flex flex-col gap-3 min-h-0">
+                
+                {/* SVG Bridge Visualizer */}
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 shrink-0">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2">Elevation</h3>
+                  
+                  <div className="w-full h-28 bg-white relative">
+                    <div style={{ paddingLeft: `${paddingLeft}px`, paddingRight: `${paddingRight}px`, height: '100%', position: 'relative' }}>
+                      <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                        
+                        {/* UDL Indicator if present */}
+                        {simulationData.activeScaledUDL > 0 && spans.map((span, i) => {
+                          const startX = spanStarts[i];
+                          const endX = spanStarts[i + 1];
+                          const startPct = (startX / simulationData.L_total) * 100;
+                          const widthPct = ((endX - startX) / simulationData.L_total) * 100;
+                          const isActive = instantUdlPattern[i] !== false;
+                          const udlGapLeft = i > 0 ? 2 : 0;
+                          const udlGapRight = i < spans.length - 1 ? 2 : 0;
+
+                          return (
+                            <g key={`udl-${i}`}>
+                              <rect 
+                                x={`calc(${startPct}% + ${udlGapLeft}px)`} 
+                                y="24" 
+                                width={`calc(${widthPct}% - ${udlGapLeft + udlGapRight}px)`} 
+                                height="16" 
+                                fill="#3b82f6" 
+                                fillOpacity={isActive ? 0.2 : 0.05} 
+                                stroke={isActive ? "#3b82f6" : "#cbd5e1"}
+                                strokeWidth="1"
+                                strokeDasharray={isActive ? "none" : "2 2"}
+                                cursor="pointer"
+                                onClick={() => {
+                                  const newPat = [...instantUdlPattern];
+                                  if (newPat[i] === undefined) newPat[i] = true;
+                                  newPat[i] = !newPat[i];
+                                  setInstantUdlPattern(newPat);
+                                }}
+                              />
+                              <text x={`calc(${startPct + widthPct/2}% + ${(udlGapLeft - udlGapRight)/2}px)`} y="32" fontSize="9" fill={isActive ? "#3b82f6" : "#94a3b8"} textAnchor="middle" dominantBaseline="central" pointerEvents="none" fontFamily="sans-serif" fontWeight="600">
+                                  {isActive ? `UDL ON: ${Number(simulationData.activeScaledUDL).toLocaleString('en-AU', { maximumFractionDigits: 2 })} kN/m` : 'UDL OFF'}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Beam Segments */}
+                        {(() => {
+                          const segments = [];
+                          let currentSeg = { start: 0, end: 0 };
+                          for (let i = 0; i < spans.length - 1; i++) {
+                            if (internalSupports[i]) {
+                              currentSeg.end = i + 1;
+                            } else {
+                              segments.push(currentSeg);
+                              currentSeg = { start: i + 1, end: i + 1 };
+                            }
+                          }
+                          segments.push(currentSeg);
+
+                          return segments.map((seg, i) => {
+                            const startX = spanStarts[seg.start];
+                            const endX = spanStarts[seg.end + 1];
+                            const startPct = (startX / simulationData.L_total) * 100;
+                            const widthPct = ((endX - startX) / simulationData.L_total) * 100;
+                            
+                            const isLeftPinned = seg.start > 0 && !internalSupports[seg.start - 1];
+                            const isRightPinned = seg.end < spans.length - 1 && !internalSupports[seg.end];
+                            
+                            const gapLeft = isLeftPinned ? 2 : 0;
+                            const gapRight = isRightPinned ? 2 : 0;
+
+                            return (
+                              <rect 
+                                key={`segment-${i}`} 
+                                x={`calc(${startPct}% + ${gapLeft}px)`} 
+                                y="40" 
+                                width={`calc(${widthPct}% - ${gapLeft + gapRight}px)`} 
+                                height="12" 
+                                fill="#ffe6cc" 
+                                stroke="#ffb380" 
+                                strokeWidth="2" 
+                              />
+                            );
+                          });
+                        })()}
+                        
+                        {/* Supports */}
+                        {spanStarts.map((pos, i) => {
+                          const px = (pos / simulationData.L_total) * 100;
+                          return (
+                            <svg key={`support-${i}`} x={`${px}%`} y="52" style={{ overflow: 'visible' }}>
+                              <polygon 
+                                points="0,0 -8,14 8,14" 
+                                fill="#ffffff" 
+                                stroke="#000000" 
+                                strokeWidth="1.5" 
+                              />
+                            </svg>
+                          );
+                        })}
+
+                        {/* Span Dimensions */}
+                        {spans.map((span, i) => {
+                           const startX = (spanStarts[i] / simulationData.L_total) * 100;
+                           const endX = (spanStarts[i + 1] / simulationData.L_total) * 100;
+                           const cx = (spanStarts[i] + span / 2) / simulationData.L_total * 100;
+
+                           return (
+                              <svg key={`dim-${i}`} style={{ overflow: 'visible' }}>
+                                 <line x1={`${startX}%`} y1="75" x2={`${startX}%`} y2="90" stroke="#94a3b8" strokeWidth="1.5" />
+                                 <line x1={`${endX}%`} y1="75" x2={`${endX}%`} y2="90" stroke="#94a3b8" strokeWidth="1.5" />
+                                 <line x1={`${startX}%`} y1="82" x2={`${endX}%`} y2="82" stroke="#94a3b8" strokeWidth="1.5" />
+                                 <svg x={`${startX}%`} y="82" style={{ overflow: 'visible' }}><polygon points="0,0 6,-3 6,3" fill="#94a3b8" /></svg>
+                                 <svg x={`${endX}%`} y="82" style={{ overflow: 'visible' }}><polygon points="0,0 -6,-3 -6,3" fill="#94a3b8" /></svg>
+                                 <svg x={`${cx}%`} y="82" style={{ overflow: 'visible' }}>
+                                    <rect x="-25" y="-9" width="50" height="18" fill="#ffffff" />
+                                    <text x="0" y="4" fontSize="12" textAnchor="middle" fill="#64748b" fontFamily="sans-serif">
+                                       {formatSpanPos(span)} m
+                                    </text>
+                                 </svg>
+                              </svg>
+                           )
+                        })}
+
+                        {/* Internal Support Toggles (SS / C) */}
+                        {spanStarts.map((pos, i) => {
+                          const px = (pos / simulationData.L_total) * 100;
+                          const isInternal = i > 0 && i < spanStarts.length - 1;
+                          const isContinuous = isInternal && internalSupports[i - 1];
+
+                          if (!isInternal) return null;
+
+                          return (
+                            <svg key={`toggle-${i}`} x={`${px}%`} y="105" style={{ overflow: 'visible' }}>
+                              <g transform={`translate(0, 0)`}>
+                                <rect x="-26" y="-10" width="52" height="20" rx="10" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
+                                <rect x={isContinuous ? "0" : "-26"} y="-10" width="26" height="20" rx="10" fill="#3b82f6" />
+                                <rect x="-26" y="-10" width="26" height="20" fill="transparent" cursor="pointer" onClick={() => !isContinuous ? null : toggleSupport(i - 1)} />
+                                <rect x="0" y="-10" width="26" height="20" fill="transparent" cursor="pointer" onClick={() => isContinuous ? null : toggleSupport(i - 1)} />
+                                <text x="-13" y="3" fontSize="10" textAnchor="middle" fill={isContinuous ? "#64748b" : "#ffffff"} pointerEvents="none" fontFamily="sans-serif" fontWeight="600">SS</text>
+                                <text x="13" y="3" fontSize="10" textAnchor="middle" fill={isContinuous ? "#ffffff" : "#64748b"} pointerEvents="none" fontFamily="sans-serif" fontWeight="600">C</text>
+                              </g>
+                            </svg>
+                          );
+                        })}
+
+                        {/* Truck Load */}
+                        {(direction === 'forward' ? scaledConfigs.forwardConfigs[0] : scaledConfigs.backwardConfigs[0])?.map((axle, i) => {
+                          const ax = sliderPos - axle.offset;
+                          if (ax < 0 || ax > simulationData.L_total) return null;
+
+                          const px = (ax / simulationData.L_total) * 100;
+                          const arrowH = Math.max(15, (axle.P / simulationData.maxAxleP) * 35); 
+                          
+                          return (
+                            <svg key={`axle-${i}`} x={`${px}%`} y="40" style={{ overflow: 'visible' }}>
+                              <line x1="0" y1={-arrowH} x2="0" y2="0" stroke="#ff0000" strokeWidth="2" />
+                              <polygon points="0,0 -4,-8 4,-8" fill="#ff0000" />
+                              <text 
+                                x="0" 
+                                y={-arrowH - 4}
+                                transform={`rotate(-90 0 ${-arrowH - 4})`}
+                                textAnchor="start" 
+                                dominantBaseline="middle"
+                                fill="#ff0000" 
+                                fontSize="13" 
+                                fontFamily="sans-serif" 
+                                fontWeight="500"
+                              >
+                                {formatAxleLoad(axle.P)}
+                              </text>
+                            </svg>
+                          );
+                        })}
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scrollable Data Panel for Charts and Table */}
+                <div className="bg-white p-2 lg:p-3 rounded-xl shadow-sm border border-slate-200 flex-1 overflow-y-auto">
+                  
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">Bending Moment Envelope, <i>M</i> (kN·m)</h3>
+                    <div className="h-[230px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={chartMargin}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis 
+                            dataKey="x" 
+                            type="number" 
+                            domain={[0, simulationData.L_total]} 
+                            ticks={chartAxes.xTicks}
+                            interval={0}
+                            tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'sans-serif' }} 
+                            tickFormatter={formatXTick}
+                            label={{ value: 'Position (m)', position: 'insideBottom', offset: -10, fill: '#64748b', fontSize: 12, fontFamily: 'sans-serif' }}
+                          />
+                          <YAxis 
+                            reversed={true} 
+                            domain={chartAxes.mDomain}
+                            ticks={chartAxes.mTicks}
+                            tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'sans-serif' }} 
+                            tickFormatter={formatYTick} 
+                            width={yAxisWidth} 
+                          />
+                          <Tooltip content={<CustomTooltipM />} />
+                          {chartAxes.mTicks.includes(0) && <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" />}
+                          <Area type="linear" dataKey="maxM_shade" fill="#bfdbfe" stroke="none" fillOpacity={0.5} isAnimationActive={false} />
+                          <Area type="linear" dataKey="minM_shade" fill="#fecaca" stroke="none" fillOpacity={0.5} isAnimationActive={false} />
+                          <Line type="linear" dataKey="maxM" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                          <Line type="linear" dataKey="minM" stroke="#ef4444" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                          <Line type="linear" dataKey="curM" stroke="#1e293b" strokeWidth={2} dot={false} isAnimationActive={false} />
+                          
+                          {peakLabels.M.map((p, i) => (
+                            <ReferenceDot 
+                              key={`m-${i}`} 
+                              x={p.x} 
+                              y={p.y} 
+                              r={3} 
+                              fill="#1e293b" 
+                              stroke="none"
+                            >
+                               <Label value={formatNum(p.y)} position={p.pos} fill="#1e293b" fontSize={11} offset={8} />
+                            </ReferenceDot>
+                          ))}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <hr className="my-2 border-slate-100" />
+
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">Shear Force Envelope, <i>V</i> (kN)</h3>
+                    <div className="h-[230px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={chartMargin}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis 
+                            dataKey="x" 
+                            type="number" 
+                            domain={[0, simulationData.L_total]} 
+                            ticks={chartAxes.xTicks}
+                            interval={0}
+                            tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'sans-serif' }} 
+                            tickFormatter={formatXTick}
+                            label={{ value: 'Position (m)', position: 'insideBottom', offset: -10, fill: '#64748b', fontSize: 12, fontFamily: 'sans-serif' }}
+                          />
+                          <YAxis 
+                            domain={chartAxes.vDomain}
+                            ticks={chartAxes.vTicks}
+                            tick={{ fontSize: 12, fill: '#64748b', fontFamily: 'sans-serif' }} 
+                            tickFormatter={formatYTick} 
+                            width={yAxisWidth} 
+                          />
+                          <Tooltip content={<CustomTooltipV />} />
+                          {chartAxes.vTicks.includes(0) && <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" />}
+                          <Area type="linear" dataKey="maxV_shade" fill="#bfdbfe" stroke="none" fillOpacity={0.5} isAnimationActive={false} />
+                          <Area type="linear" dataKey="minV_shade" fill="#fecaca" stroke="none" fillOpacity={0.5} isAnimationActive={false} />
+                          <Line type="linear" dataKey="maxV" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                          <Line type="linear" dataKey="minV" stroke="#ef4444" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                          <Line type="linear" dataKey="curV" stroke="#1e293b" strokeWidth={2} dot={false} isAnimationActive={false} />
+                          
+                          {peakLabels.V.map((p, i) => (
+                            <ReferenceDot 
+                              key={`v-${i}`} 
+                              x={p.x} 
+                              y={p.y} 
+                              r={3} 
+                              fill="#1e293b" 
+                              stroke="none"
+                            >
+                               <Label value={formatNum(p.y)} position={p.pos} fill="#1e293b" fontSize={11} offset={8} />
+                            </ReferenceDot>
+                          ))}
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <hr className="my-2 border-slate-100" />
+
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">Support Reactions, <i>R</i> (kN)</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="py-1 px-2 text-xs font-semibold text-slate-700">Support</th>
+                            <th className="py-1 px-2 text-xs font-semibold text-slate-700">Position (m)</th>
+                            <th className="py-1 px-2 text-xs font-semibold text-slate-700">Instantaneous, <i>R</i><sub>inst</sub></th>
+                            <th className="py-1 px-2 text-xs font-semibold text-slate-700">Maximum, <i>R</i><sub>max</sub></th>
+                            <th className="py-1 px-2 text-xs font-semibold text-slate-700">Minimum, <i>R</i><sub>min</sub></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            return spanStarts.map((pos, i) => {
+                              return (
+                                <tr key={`reaction-${i}`} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                  <td className="py-1.5 px-2 text-sm text-slate-800">{i + 1}</td>
+                                  <td className="py-1.5 px-2 text-sm text-slate-600">{formatSpanPos(pos)}</td>
+                                  <td className="py-1.5 px-2 text-sm text-slate-800 font-medium">{formatNum(currentStateForTable.R[i] || 0)}</td>
+                                  <td className="py-1.5 px-2 text-sm text-slate-800 font-medium">{formatNum(simulationData.maxReactions[i] || 0)}</td>
+                                  <td className="py-1.5 px-2 text-sm text-slate-800 font-medium">{formatNum(simulationData.minReactions[i] || 0)}</td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
