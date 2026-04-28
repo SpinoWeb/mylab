@@ -12,13 +12,15 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Button: typeof import('primevue/button')['default']
-    copy: typeof import('./src/components/HelloWorld copy.vue')['default']
+    copy: typeof import('./src/components/Reluis copy.vue')['default']
     Gantt: typeof import('./src/components/Gantt.vue')['default']
     HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     Home: typeof import('./src/components/Home.vue')['default']
+    ProgressBar: typeof import('primevue/progressbar')['default']
     Reluis: typeof import('./src/components/Reluis.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Select: typeof import('primevue/select')['default']
+    SerpApi: typeof import('./src/components/SerpApi.vue')['default']
   }
 }

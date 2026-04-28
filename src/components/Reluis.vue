@@ -1,5 +1,10 @@
 <template>
   <div id="root">
+    <ProgressBar
+      :mode="loading ? 'indeterminate' : 'determinate'"
+      style="height: 4px"
+    />
+
     <div class="h-[8vh] overflow-y-auto text-left">{{ keys }}</div>
 
     <!-- -->
@@ -86,6 +91,7 @@ import "vue-json-pretty/lib/styles.css";
 
 const apiURL: string = `http://46.37.12.82/reluis/v2/api-docs`;
 
+const loading = ref<boolean>(false);
 const reluis = ref();
 const keys = ref<string[]>([]);
 const key = ref<string>();
@@ -116,11 +122,15 @@ onMounted(async () => {
 
 async function fetchReluisApi() {
   try {
+    loading.value = true;
+
     const response = await fetch(apiURL);
     if (!response.ok) {
       throw new Error(`Response status: ${response.status}`);
     }
     reluis.value = await response.json();
+
+    loading.value = false;
   } catch (error) {
     console.error(error.message);
   }

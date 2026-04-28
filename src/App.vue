@@ -4,10 +4,8 @@ import { useRouter } from "vue-router";
 
 const router = useRouter();
 
-const pushRouter = (path: string | undefined = "/") => {
-  const myPath = path ? path : "/";
-  router.push(myPath);
-};
+const pushRouter = (path: string | undefined = "/") =>
+  router.push(path ? path : "/");
 
 // darkMode
 const darkMode = ref<boolean>(true);
@@ -45,6 +43,13 @@ onMounted(() => {
 // provide globalData
 import { provide } from "vue";
 provide("darkMode", darkMode);
+
+// tests
+const tests = ref([
+  { route: "/gantt", icon: "pi pi-chart-bar", label: "Gantt" },
+  { route: "/reluis", icon: "pi pi-chart-bar", label: "Reluis" },
+  { route: "/serpapi", icon: "pi pi-chart-bar", label: "SerpApi" },
+]);
 </script>
 
 <template>
@@ -59,10 +64,11 @@ provide("darkMode", darkMode);
           @click="pushRouter('/')"
         />
         <Button
-          icon="pi pi-chart-bar"
+          v-for="i in tests"
+          :icon="i.icon"
           variant="text"
-          aria-label="Gantt"
-          @click="pushRouter('/gantt')"
+          :label="i.label"
+          @click="pushRouter(i.route)"
         />
         {{ $route.fullPath }}
       </div>
