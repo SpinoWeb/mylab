@@ -15,6 +15,7 @@
     "@primevue/themes": "^4.5.4",
     "@tailwindcss/vite": "^4.2.4",
     "browser-fs-access": "^0.35.0",
+    "exceljs": "^4.4.0",
     "highcharts": "^12.6.0",
     "highcharts-vue": "^2.0.1",
     "mdi-vue": "^3.0.13",

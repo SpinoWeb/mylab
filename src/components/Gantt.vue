@@ -1,17 +1,179 @@
 <template>
   <div>
-    <Chart :constructor-type="'ganttChart'" :options="chartOptions"> </Chart>
+    <Tabs value="1">
+      <TabList>
+        <Tab value="0">Data</Tab>
+        <Tab value="1">Gantt</Tab>
+      </TabList>
+      <TabPanels>
+        <TabPanel value="0">
+          <vue-json-pretty :data="series" :showIcon="true" :showLength="true" />
+        </TabPanel>
+        <TabPanel value="1">
+          <Chart :constructor-type="'ganttChart'" :options="chartOptions">
+          </Chart>
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
 
+import VueJsonPretty from "vue-json-pretty";
+import "vue-json-pretty/lib/styles.css";
+
+import Highcharts from "highcharts";
+
 import { Chart } from "highcharts-vue";
 import "highcharts/modules/gantt";
+import "highcharts/modules/draggable-points";
+import "highcharts/modules/accessibility";
+import "highcharts/themes/adaptive";
 
 const day = 24 * 36e5,
   today = Math.floor(Date.now() / day) * day;
+
+const series = ref([
+  {
+    name: "Offices",
+    data: [
+      {
+        name: "New offices",
+        id: "new_offices",
+        owner: "Peter",
+      },
+      {
+        name: "Prepare office building",
+        id: "prepare_building",
+        parent: "new_offices",
+        start: today - 2 * day,
+        end: today + 6 * day,
+        completed: {
+          amount: 0.2,
+        },
+        owner: "Linda",
+      },
+      {
+        name: "Inspect building",
+        id: "inspect_building",
+        dependency: "prepare_building",
+        parent: "new_offices",
+        start: today + 6 * day,
+        end: today + 8 * day,
+        owner: "Ivy",
+      },
+      {
+        name: "Passed inspection",
+        id: "passed_inspection",
+        dependency: "inspect_building",
+        parent: "new_offices",
+        start: today + 9.5 * day,
+        milestone: true,
+        owner: "Peter",
+      },
+      {
+        name: "Relocate",
+        id: "relocate",
+        dependency: "passed_inspection",
+        parent: "new_offices",
+        owner: "Josh",
+      },
+      {
+        name: "Relocate staff",
+        id: "relocate_staff",
+        parent: "relocate",
+        start: today + 10 * day,
+        end: today + 11 * day,
+        owner: "Mark",
+      },
+      {
+        name: "Relocate test facility",
+        dependency: "relocate_staff",
+        parent: "relocate",
+        start: today + 11 * day,
+        end: today + 13 * day,
+        owner: "Anne",
+      },
+      {
+        name: "Relocate cantina",
+        dependency: "relocate_staff",
+        parent: "relocate",
+        start: today + 11 * day,
+        end: today + 14 * day,
+      },
+    ],
+  },
+  {
+    name: "Product",
+    data: [
+      {
+        name: "New product launch",
+        id: "new_product",
+        owner: "Peter",
+      },
+      {
+        name: "Development",
+        id: "development",
+        parent: "new_product",
+        start: today - day,
+        end: today + 11 * day,
+        completed: {
+          amount: 0.6,
+          fill: "#e80",
+        },
+        owner: "Susan",
+      },
+      {
+        name: "Beta",
+        id: "beta",
+        dependency: "development",
+        parent: "new_product",
+        start: today + 12.5 * day,
+        milestone: true,
+        owner: "Peter",
+      },
+      {
+        name: "Final development",
+        id: "finalize",
+        dependency: "beta",
+        parent: "new_product",
+        start: today + 13 * day,
+        end: today + 17 * day,
+      },
+      {
+        name: "Launch",
+        dependency: "finalize",
+        parent: "new_product",
+        start: today + 17.5 * day,
+        milestone: true,
+        owner: "Peter",
+      },
+    ],
+  },
+  {
+    name: "tests",
+    data: [
+      {
+        name: "tests",
+        id: "001",
+        owner: "Peter",
+      },
+      {
+        name: "Prepare office building",
+        id: "prepare_building",
+        parent: "001",
+        start: today - 2 * day,
+        end: today + 60 * day,
+        completed: {
+          amount: 0.2,
+        },
+        owner: "Linda",
+      },
+    ],
+  },
+]);
 
 const chartOptions = ref({
   chart: {
@@ -60,145 +222,7 @@ const chartOptions = ref({
     },
   },
 
-  series: [
-    {
-      name: "Offices",
-      data: [
-        {
-          name: "New offices",
-          id: "new_offices",
-          owner: "Peter",
-        },
-        {
-          name: "Prepare office building",
-          id: "prepare_building",
-          parent: "new_offices",
-          start: today - 2 * day,
-          end: today + 6 * day,
-          completed: {
-            amount: 0.2,
-          },
-          owner: "Linda",
-        },
-        {
-          name: "Inspect building",
-          id: "inspect_building",
-          dependency: "prepare_building",
-          parent: "new_offices",
-          start: today + 6 * day,
-          end: today + 8 * day,
-          owner: "Ivy",
-        },
-        {
-          name: "Passed inspection",
-          id: "passed_inspection",
-          dependency: "inspect_building",
-          parent: "new_offices",
-          start: today + 9.5 * day,
-          milestone: true,
-          owner: "Peter",
-        },
-        {
-          name: "Relocate",
-          id: "relocate",
-          dependency: "passed_inspection",
-          parent: "new_offices",
-          owner: "Josh",
-        },
-        {
-          name: "Relocate staff",
-          id: "relocate_staff",
-          parent: "relocate",
-          start: today + 10 * day,
-          end: today + 11 * day,
-          owner: "Mark",
-        },
-        {
-          name: "Relocate test facility",
-          dependency: "relocate_staff",
-          parent: "relocate",
-          start: today + 11 * day,
-          end: today + 13 * day,
-          owner: "Anne",
-        },
-        {
-          name: "Relocate cantina",
-          dependency: "relocate_staff",
-          parent: "relocate",
-          start: today + 11 * day,
-          end: today + 14 * day,
-        },
-      ],
-    },
-    {
-      name: "Product",
-      data: [
-        {
-          name: "New product launch",
-          id: "new_product",
-          owner: "Peter",
-        },
-        {
-          name: "Development",
-          id: "development",
-          parent: "new_product",
-          start: today - day,
-          end: today + 11 * day,
-          completed: {
-            amount: 0.6,
-            fill: "#e80",
-          },
-          owner: "Susan",
-        },
-        {
-          name: "Beta",
-          id: "beta",
-          dependency: "development",
-          parent: "new_product",
-          start: today + 12.5 * day,
-          milestone: true,
-          owner: "Peter",
-        },
-        {
-          name: "Final development",
-          id: "finalize",
-          dependency: "beta",
-          parent: "new_product",
-          start: today + 13 * day,
-          end: today + 17 * day,
-        },
-        {
-          name: "Launch",
-          dependency: "finalize",
-          parent: "new_product",
-          start: today + 17.5 * day,
-          milestone: true,
-          owner: "Peter",
-        },
-      ],
-    },
-    {
-      name: "tests",
-      data: [
-        {
-          name: "tests",
-          id: "001",
-          owner: "Peter",
-        },
-        {
-          name: "Prepare office building",
-          id: "prepare_building",
-          parent: "001",
-          start: today - 2 * day,
-          end: today + 60 * day,
-          completed: {
-            amount: 0.2,
-          },
-          owner: "Linda",
-        },
-      ],
-    },
-  ],
+  series: series.value,
   tooltip: {
     pointFormat:
       '<span style="font-weight: bold">{point.name}</span><br>' +
@@ -213,6 +237,7 @@ const chartOptions = ref({
   title: {
     text: "Gantt",
   },
+
   xAxis: [
     {
       currentDateIndicator: {
@@ -241,6 +266,27 @@ const chartOptions = ref({
       },
     },
   ],
+
+  /*
+  xAxis: [
+    {
+      labels: {
+        format: "{value:%w}", // day of the week
+      },
+      grid: {
+        // default setting
+        enabled: true,
+      },
+      tickInterval: 1000 * 60 * 60 * 24, // Day
+    },
+    {
+      labels: {
+        format: "{value:%W}",
+      },
+      tickInterval: 1000 * 60 * 60 * 24 * 7, // week
+    },
+  ],
+  */
   yAxis: {
     grid: {
       borderWidth: 0,
@@ -266,7 +312,7 @@ const chartOptions = ref({
       },
     },
     point: {
-      descriptionFormatter: function (point) {
+      descriptionFormatter: function (point: any) {
         const completedValue = point.completed
             ? point.completed.amount || point.completed
             : null,
@@ -385,6 +431,58 @@ const chartOptions2 = ref({
     },
   ],
 });
+
+//
+//
+//
+import ExcelJS from "exceljs";
+
+async function xlsxToJson(filePath: string): Promise<any[]> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(filePath);
+
+  const worksheet = workbook.worksheets[0]; // primo foglio
+
+  const rows: any[] = [];
+  let headers: string[] = [];
+
+  worksheet.eachRow((row, rowNumber: number) => {
+    const values = row.values as Array<any>;
+
+    // ExcelJS include un elemento vuoto all'indice 0
+    const cleanedValues = values.slice(1);
+
+    if (rowNumber === 1) {
+      // prima riga = header
+      headers = cleanedValues.map((h) => String(h).trim());
+    } else {
+      const rowObject: Record<string, any> = {};
+
+      cleanedValues.forEach((value, index) => {
+        const key = headers[index] || `col_${index}`;
+        rowObject[key] = value;
+      });
+
+      rows.push(rowObject);
+    }
+  });
+
+  return rows;
+}
+
+// Esempio di utilizzo
+/*
+(async () => {
+  const filePath = './file.xlsx';
+
+  try {
+    const json = await xlsxToJson(filePath);
+    console.log(JSON.stringify(json, null, 2));
+  } catch (error) {
+    console.error('Errore:', error);
+  }
+})();
+*/
 </script>
 
 <style scoped>
