@@ -14,8 +14,9 @@
     "@primevue/auto-import-resolver": "^4.5.5",
     "@primevue/themes": "^4.5.4",
     "@tailwindcss/vite": "^4.2.4",
+    "@types/three": "^0.184.0",
     "browser-fs-access": "^0.35.0",
-    "exceljs": "^4.4.0",
+    "exceljs": "^3.4.0",
     "highcharts": "^12.6.0",
     "highcharts-vue": "^2.0.1",
     "mdi-vue": "^3.0.13",
@@ -23,7 +24,10 @@
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
     "tailwindcss": "^4.2.4",
+    "three": "^0.184.0",
+    "three-viewport-gizmo": "^2.2.0",
     "unplugin-vue-components": "^32.0.0",
+    "uuid": "^14.0.0",
     "vue": "^3.5.12",
     "vue-json-pretty": "^2.6.0",
     "vue-router": "^5.0.6"
@@ -32,7 +36,7 @@
     "@vitejs/plugin-vue": "^5.1.4",
     "sass-embedded": "^1.99.0",
     "typescript": "~5.6.2",
-    "vite": "^5.4.10",
+    "vite": "^5.2.0",
     "vue-tsc": "^2.1.8"
   }
 }

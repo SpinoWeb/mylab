@@ -12,10 +12,14 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Button: typeof import('primevue/button')['default']
-    copy: typeof import('./src/components/Reluis copy.vue')['default']
+    Column: typeof import('primevue/column')['default']
+    ConsoleLog: typeof import('./src/components/ConsoleLog.vue')['default']
+    Copia: typeof import('./src/components/Gantt - Copia.vue')['default']
+    DataTable: typeof import('primevue/datatable')['default']
     Gantt: typeof import('./src/components/Gantt.vue')['default']
-    HelloWorld: typeof import('./src/components/HelloWorld.vue')['default']
     Home: typeof import('./src/components/Home.vue')['default']
+    MultiSelect: typeof import('primevue/multiselect')['default']
+    OpenGeometryIo: typeof import('./src/components/OpenGeometryIo.vue')['default']
     ProgressBar: typeof import('primevue/progressbar')['default']
     Reluis: typeof import('./src/components/Reluis.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
@@ -27,5 +31,7 @@ declare module 'vue' {
     TabPanel: typeof import('primevue/tabpanel')['default']
     TabPanels: typeof import('primevue/tabpanels')['default']
     Tabs: typeof import('primevue/tabs')['default']
+    Tri: typeof import('./src/components/Tri.vue')['default']
+    TriViewer: typeof import('./src/components/TriViewer.vue')['default']
   }
 }

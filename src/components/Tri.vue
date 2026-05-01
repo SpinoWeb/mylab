@@ -1,0 +1,316 @@
+<template>
+  <div class="flex flex-col gap-2 p-2 w-full h-full border-1">
+    <div class="flex flex-row gap-2">
+      <!-- select job -->
+      <Select
+        v-model="job"
+        :options="jobs"
+        placeholder="Select a Job"
+        class="w-1/4"
+        :disabled="loading"
+        @change="getDataFromXlsx"
+      />
+      <!-- select table -->
+      <Select
+        v-model="table"
+        :options="tables"
+        optionLabel="label"
+        optionValue="key"
+        placeholder="Select a Table"
+        class="w-1/4"
+        :disabled="loading"
+      />
+    </div>
+
+    <Tabs value="1">
+      <TabList>
+        <Tab value="0">Tables</Tab>
+        <Tab value="1">Tri</Tab>
+      </TabList>
+      <TabPanels>
+        <TabPanel value="0">
+          <div class="flex flex-col gap-2">
+            <div class="flex flex-row gap-2">
+              <!-- select job -->
+              <Select
+                v-model="job"
+                :options="jobs"
+                placeholder="Select a Job"
+                class="w-full md:w-56"
+                :disabled="loading"
+                @change="getDataFromXlsx"
+              />
+
+              <!-- select table -->
+              <Select
+                v-model="table"
+                :options="tables"
+                optionLabel="label"
+                optionValue="key"
+                placeholder="Select a Table"
+                class="w-full md:w-56"
+                :disabled="loading"
+              />
+            </div>
+
+            <!-- loading -->
+            <ProgressBar
+              :mode="loading ? 'indeterminate' : 'determinate'"
+              style="height: 2px"
+            />
+
+            <DataTable
+              v-if="table"
+              :value="tableData.records"
+              :loading="loading"
+              size="small"
+              tableStyle="min-width: 50rem"
+              scrollable
+              scrollHeight="500px"
+            >
+              <template #header>
+                <div class="text-left">
+                  {{ `${tableData.table} (${tableData.records.length})` }}
+                </div>
+              </template>
+              <Column
+                v-for="key in tableData.keys"
+                :field="key"
+                :header="key"
+              />
+            </DataTable>
+
+            <vue-json-pretty
+              v-if="false"
+              :data="tableData"
+              :showIcon="true"
+              :showLength="true"
+              :collapsed-node-length="2"
+              :theme="darkMode ? 'dark' : 'light'"
+            />
+          </div>
+        </TabPanel>
+        <TabPanel value="1">
+          <TriViewer v-model="data" :options="{ scaleUnits: scaleUnits }" />
+        </TabPanel>
+      </TabPanels>
+    </Tabs>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref, computed } from "vue";
+
+import VueJsonPretty from "vue-json-pretty";
+import "vue-json-pretty/lib/styles.css";
+
+import ExcelJS from "exceljs";
+
+import TriViewer from "./TriViewer.vue";
+
+import { inject } from "vue";
+const darkMode = inject("darkMode");
+
+import { MyData } from "../services/Types";
+
+// const
+const jobs: string[] = [
+  "tavolo",
+  "edificio22",
+  "zappulla02",
+  "Modello_3",
+  "sample04",
+];
+const job = ref<string | undefined>();
+const data = ref<MyData>({});
+const loading = ref<boolean>(false);
+const table = ref<string | undefined>();
+const tables = computed((): any[] => {
+  return Object.keys(data.value).map((key: string) => {
+    return { key: key, label: `${key} (${data.value[key].records.length})` };
+  });
+});
+const tableData = computed(
+  (): MyData => (table.value ? data.value[table.value] : {}),
+);
+//const getTableData = () => Promise.resolve(table.value ? data.value[table.value] : {});
+
+onMounted(async () => {
+  await getDataFromXlsx();
+});
+
+//
+// get data for dev
+const loadXlsx = async (filePath: string): Promise<MyData | undefined> => {
+  //console.log("Tri > loadXlsx");
+  if (!job.value) return undefined;
+
+  // reset data
+  let data: MyData = {};
+  let CurrUnits: any;
+
+  // get url content
+  const arrayBuffer = await (await fetch(filePath)).arrayBuffer();
+  //console.log("Tri > loadXlsx > arrayBuffer", arrayBuffer);
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(arrayBuffer).then(() => {
+    // get CurrUnits
+    const pc: any = wb.getWorksheet("Program Control");
+    if (pc) {
+      const keys = pc.getRow(2).values;
+      const index = keys.findIndex((k: string) => k == "CurrUnits");
+      if (index > -1)
+        CurrUnits = pc.getRow(4).values[index].replace(/\s/g, "").split(",");
+      //console.log("Tri > loadXlsx > CurrUnits", CurrUnits.value);
+    }
+
+    // iterate all over sheets
+    wb.eachSheet((ws: any) => {
+      // sheet name
+      const name: string = "name" in ws ? ws.name : "sheet-01";
+      //console.log("loadXlsx > name", name);
+
+      // table name
+      const table: string = String(ws.getRow(1).getCell(1).value);
+      //console.log("loadXlsx > table", table);
+
+      // keys
+      const keys: string[] = ws.getRow(2).values.splice(1);
+      //console.log("loadXlsx > keys", keys);
+
+      // units
+      const units: string[] = ws.getRow(3).values.splice(1);
+      //console.log("loadXlsx > units", units);
+
+      // add property
+      data[name] = {
+        table: table,
+        keys: keys,
+        units: units,
+        records: [],
+      };
+
+      //let records: any = [];
+      //let a = [keys];
+
+      // Iterate over all rows that have values in a worksheet
+      ws.eachRow((row: any, rowNumber: number) => {
+        if (rowNumber > 3) {
+          const values: (string | number | boolean | Date | null)[] =
+            row.values.splice(1);
+          //console.log("loadXlsx > values", values.length, keys.length);
+          for (let i = 0; i < keys.length - values.length; i++) {
+            values.push(null);
+          }
+          /*
+          console.log(
+            "loadXlsx > keys - values",
+            name,
+            keys.length - values.length,
+          );
+          */
+
+          // get [key, value]
+          const entries = keys.map(
+            (value: string | number | boolean | Date | null, i: number) => {
+              return [value, values[i]];
+            },
+          );
+          //console.log("loadXlsx > entries", entries);
+
+          const obj = Object.fromEntries(entries);
+          //console.log("loadXlsx > obj", obj);
+
+          // array of objects - each row with keys
+          data[name].records.push(obj);
+
+          // array with only data
+          //data[name].records = data[name].records.concat(values);
+        }
+      });
+      //console.log("loadXlsx > name\n", name, "\n", data.value[name].records);
+    });
+
+    // CurrUnits
+    //data.value["Settings"].CurrUnits = CurrUnits;
+
+    //return data;
+  });
+
+  return data;
+};
+
+const getDataFromXlsx = async () => {
+  loading.value = true;
+  const filePath: string = "./xlsx/" + job.value + ".xlsx";
+
+  try {
+    await loadXlsx(filePath).then((response) => {
+      //console.log(response);
+      data.value = response !== undefined ? response : {};
+      table.value = undefined;
+    });
+
+    loading.value = false;
+  } catch (error) {
+    console.error("getDataFromXlsx > error:", error);
+  }
+};
+
+//
+const CurrUnits = computed(() => {
+  //const defaultCurrUnits: [string, string, string] = ["kN", "m", "C"];
+  const defaultCurrUnits: string = "kN, m, C";
+
+  const CurrUnits = data.value?.["Program Control"]
+    ? "CurrUnits" in data.value?.["Program Control"].records[0]
+      ? data.value?.["Program Control"].records[0].CurrUnits
+      : defaultCurrUnits
+    : defaultCurrUnits;
+
+  //console.log(CurrUnits);
+  return CurrUnits.trim().split(",");
+});
+const scaleUnits = computed((): [number, number, number] => {
+  if (!CurrUnits.value) return [1, 1, 1];
+  //console.log(`CurrUnits: ${CurrUnits.value}`);
+
+  const [Force, Length, Temperature]: [string, string, string] =
+    CurrUnits.value;
+  //console.log(`Length: ${Length}`);
+
+  // Force
+  let scaleForce: number = 1;
+  switch (Force.trim()) {
+    case "N":
+      scaleForce = 1 / 1000;
+      break;
+
+    default: // kN
+      scaleForce = 1;
+      break;
+  }
+
+  // Length
+  let scaleLength: number = 1;
+  switch (Length.trim()) {
+    case "mm":
+      scaleLength = 1 / 1000;
+      break;
+
+    case "cm":
+      scaleLength = 1 / 100;
+      break;
+
+    default: // m
+      scaleLength = 1;
+      break;
+  }
+
+  //console.log(`scaleUnits: ${scaleLength}`);
+  return [scaleForce, scaleLength, 1];
+});
+</script>
+
+<style scoped></style>

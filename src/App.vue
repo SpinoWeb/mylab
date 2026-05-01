@@ -20,7 +20,7 @@ const toggleDarkMode = (darkMode: boolean = true) => {
 
   // localStorage
   localStorage.setItem(
-    "bridgebase-darkmode",
+    "my-lab-darkmode",
     JSON.stringify({ darkMode: darkMode }),
   );
 };
@@ -49,6 +49,7 @@ const tests = ref([
   { route: "/gantt", icon: "pi pi-chart-bar", label: "Gantt" },
   { route: "/reluis", icon: "pi pi-chart-bar", label: "Reluis" },
   { route: "/serpapi", icon: "pi pi-chart-bar", label: "SerpApi" },
+  { route: "/tri", icon: "pi pi-box", label: "Tri" },
 ]);
 </script>
 
@@ -82,7 +83,7 @@ const tests = ref([
       </div>
     </header>
     <RouterView />
-    <footer><!-- footer links -->my lab</footer>
+    <footer>my lab</footer>
   </div>
 </template>
 
