@@ -33,7 +33,7 @@
       <TriViewer
         v-model="data"
         :loading="loading"
-        :options="{ scaleUnits: scaleUnits }"
+        :options="{ scaleUnits: scaleUnits, xyzLimits: xyzLimits }"
       />
     </div>
 
@@ -92,6 +92,7 @@ import { MyData } from "../services/Types";
 const jobs: string[] = [
   "tavolo",
   "edificio22",
+  "edificio33",
   "zappulla02",
   "Modello_3",
   "sample04",
@@ -289,6 +290,83 @@ const scaleUnits = computed((): [number, number, number] => {
 
   //console.log(`scaleUnits: ${scaleLength}`);
   return [scaleForce, scaleLength, 1];
+});
+const xyzLimits = computed(() => {
+  if (!data.value.hasOwnProperty("Joint Coordinates"))
+    return {
+      Xmin: 0,
+      Xmax: 0,
+      Xlen: 0,
+      Ymin: 0,
+      Ymax: 0,
+      Ylen: 0,
+      Zmin: 0,
+      Zmax: 0,
+      Zlen: 0,
+    };
+
+  // else
+
+  const JointCoordinates = data.value["Joint Coordinates"].records;
+  //console.log("MyViewer > limits", JointCoordinates);
+
+  const Xmin: number =
+    JointCoordinates.length > 0
+      ? Math.min.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.XorR),
+        )
+      : 0;
+  const Xmax: number =
+    JointCoordinates.length > 0
+      ? Math.max.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.XorR),
+        )
+      : 0;
+
+  const Ymin: number =
+    JointCoordinates.length > 0
+      ? Math.min.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.Y),
+        )
+      : 0;
+  const Ymax: number =
+    JointCoordinates.length > 0
+      ? Math.max.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.Y),
+        )
+      : 0;
+
+  const Zmin: number =
+    JointCoordinates.length > 0
+      ? Math.min.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.Z),
+        )
+      : 0;
+  const Zmax: number =
+    JointCoordinates.length > 0
+      ? Math.max.apply(
+          Math,
+          JointCoordinates.map((j: any) => j.Z),
+        )
+      : 0;
+
+  //console.log("Tri > limits", Xmin, Xmax, Zmin, Zmax);
+  return {
+    Xmin: Xmin,
+    Xmax: Xmax,
+    Xlen: Math.abs(Xmax - Xmin),
+    Ymin: Ymin,
+    Ymax: Ymax,
+    Ylen: Math.abs(Ymax - Ymin),
+    Zmin: Zmin,
+    Zmax: Zmax,
+    Zlen: Math.abs(Zmax - Zmin),
+  };
 });
 </script>
 

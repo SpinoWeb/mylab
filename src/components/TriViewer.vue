@@ -5,8 +5,20 @@
     class="my-viewer-container"
   >
     <div class="absolute top-0 left-0 flex flex-column gap-2 p-2">
-      <Button label="play" :disabled="loading" @click="play" />
-      <Button label="clear" :disabled="loading" @click="clear" />
+      <Button icon="pi pi-play" :disabled="loading" @click="play" />
+      <Button icon="pi pi-times" :disabled="loading" @click="clear" />
+      <Button
+        icon="pi pi-table"
+        :style="`background: ${Settings.grids.labelColor}`"
+        :disabled="loading"
+        @click="setObjectVisible('grids')"
+      />
+      <Button
+        icon="pi pi-tag"
+        :style="`background: ${Settings.joints.labelColor}`"
+        :disabled="loading"
+        @click="setObjectVisible('jointsLabels')"
+      />
     </div>
 
     <ConsoleLog :loading="loading" />
@@ -27,11 +39,39 @@ import { myTri } from "./myTri";
 
 import { Point3D } from "../services/Types";
 
+//
+// groups
+//
+const Groups: string[] = [
+  "grids",
+  //"gridsLabel",
+  "jointsLabels",
+  "framesLabels",
+  "framesSolids",
+  "framesLocalAxes",
+];
+
+//
+// Settings
+//
 const Settings = {
+  grids: {
+    color: "#696",
+    linewidth: 1,
+    labelColor: "#696",
+  },
   joints: {
-    size: 0.2,
+    size: 0.3,
     color: "#FB8C00",
     labelColor: "#FB8C00",
+  },
+  frames: {
+    color: "#2196F3",
+    //color: "#BBB",
+    linewidth: 0.2,
+    extrudeOpacity: 0.7,
+    extrudeColor: "#2196F3",
+    labelColor: "#2196F3",
   },
 };
 
@@ -44,7 +84,20 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   modelValue: () => {},
   options: () => {
-    scaleUnits: [1, 1, 1];
+    return {
+      scaleUnits: [1, 1, 1],
+      xyzLimits: {
+        Xmin: 0,
+        Xmax: 0,
+        Xlen: 0,
+        Ymin: 0,
+        Ymax: 0,
+        Ylen: 0,
+        Zmin: 0,
+        Zmax: 0,
+        Zlen: 0,
+      },
+    };
   },
   loading: false,
 });
@@ -77,7 +130,7 @@ watch(darkMode, (n: any) => {
 });
 
 watch(data, () => {
-  console.log(`data updating...`);
+  console.olog(`data updating...`);
   //console.log(`data: ${JSON.stringify(n)}`);
   clear();
   //play();
@@ -88,7 +141,9 @@ onMounted(async () => {
   setTimeout(() => init(), 200);
 });
 
+// -------------
 // init
+// -------------
 const init = async () => {
   console.olog("init");
 
@@ -200,137 +255,124 @@ const init = async () => {
   }).observe(container);
 };
 
-//
-//
-//
-
-// addLine
-const addLine = ({
-  name,
-  vertex,
-  scale,
-  color,
-  linewidth,
-  visible,
-  dashed,
+// -------------
+// addGrid
+// -------------
+const addGrid = async ({
+  GridID,
+  AxisDir,
+  XRYZCoord,
+  BubbleSize,
 }: {
-  name?: string;
-  vertex?: Point3D[];
-  scale?: Point3D;
-  color?: string;
-  linewidth?: number;
-  visible?: boolean;
-  dashed?: boolean;
-}): THREE.Line | undefined => {
-  //console.log("addLine");
-  if (!name) name = "new line";
-  if (!vertex)
+  GridID: string;
+  AxisDir: string;
+  XRYZCoord: number;
+  BubbleSize?: number;
+}) => {
+  //console.log("addGrid");
+
+  // get setting from model
+  const color: string | undefined = Settings?.grids?.color;
+  const linewidth: number | undefined = Settings?.grids?.linewidth;
+  const labelColor: string | undefined = Settings?.grids?.labelColor;
+
+  if (!BubbleSize) BubbleSize = 1 / options.value.scaleUnits[1]; // m to current unit
+
+  const xyzLimits = options.value.xyzLimits;
+  //console.log("addGrid > xyzLimits", xyzLimits);
+
+  // vertex line
+  let vertex: Point3D[] = [];
+  // X
+  if (AxisDir === "X") {
     vertex = [
-      { X: 0, Y: 0, Z: 0 },
-      { X: 1, Y: 1, Z: 1 },
+      { X: XRYZCoord, Z: xyzLimits.Ymin - BubbleSize, Y: 0 },
+      { X: XRYZCoord, Z: xyzLimits.Ymax + BubbleSize, Y: 0 },
     ];
-  if (!scale) scale = { X: 1, Y: 1, Z: 1 };
-  const myColor: THREE.Color = color ? myTri.setColor(color) : myTri.setColor();
-  if (!linewidth) linewidth = 1;
-  if (!visible) visible = true;
-  if (!dashed) dashed = false;
+  }
+  // Y
+  if (AxisDir === "Y") {
+    vertex = [
+      { X: xyzLimits.Xmin - BubbleSize, Z: XRYZCoord, Y: 0 },
+      { X: xyzLimits.Xmax + BubbleSize, Z: XRYZCoord, Y: 0 },
+    ];
+  }
+  // skip z (vertical)
+  //if (AxisDir === "Z") return;
 
-  //
-  const id: string = uuidv4();
+  const scale = {
+    X: options.value.scaleUnits[1],
+    Y: options.value.scaleUnits[1],
+    Z: options.value.scaleUnits[1],
+  };
 
-  // set material
-  const material: THREE.LineBasicMaterial = dashed
-    ? // dashed
-      new THREE.LineDashedMaterial({
-        color: myColor,
-        linewidth: linewidth,
-        scale: 10,
-        dashSize: 3,
-        gapSize: 1,
-      })
-    : // solid
-      new THREE.LineBasicMaterial({
-        color: myColor,
-        linewidth: linewidth,
-      });
-
-  // set points
-  const points: THREE.Vector3[] = vertex.map(
-    (i: Point3D) => new THREE.Vector3(i.X, i.Y, i.Z),
-  );
-  //console.log("addLine", points);
-
-  // set geometry
-  const geometry: THREE.BufferGeometry =
-    new THREE.BufferGeometry().setFromPoints(points);
-
-  // set line
-  const line: THREE.Line = new THREE.Line(geometry, material);
-  line.scale.set(scale.X, scale.Y, scale.Z);
-  //console.log("addLine", line);
-
-  // assign line name, visible
-  Object.assign(line, {
-    //id: id,
-    name: name,
-    visible: visible,
+  // line
+  const line: THREE.Line | undefined = myTri.getLine({
+    name: `Grid-${GridID}`,
+    vertex: vertex,
+    scale: scale,
+    dashed: true,
+    color: color,
+    linewidth: linewidth,
   });
 
-  line.computeLineDistances();
+  // label
+  const label: THREE.Sprite | undefined = myTri.getLabel({
+    name: `Grid-${GridID}-Label`,
+    text: GridID,
+    vertex: vertex[1],
+    scale: scale,
+    color: labelColor,
+  });
 
-  return line;
+  //
+  return { line: line, label: label };
 };
 
+// -------------
+// addJoint
+// -------------
 const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
-  const id: string = uuidv4();
+  //const id: string = uuidv4();
 
   // get setting from model
   const color: string | undefined = Settings?.joints?.color;
   const size: number | undefined = Settings?.joints?.size;
-  //console.log("size", size);
+  const labelColor: string | undefined = Settings?.joints?.labelColor;
+
+  const scale = {
+    X: options.value.scaleUnits[1],
+    Y: options.value.scaleUnits[1],
+    Z: options.value.scaleUnits[1],
+  };
 
   // point
-  const point: THREE.Points = new THREE.Points(
-    new THREE.BufferGeometry(),
-    new THREE.PointsMaterial({ size: size, color: myTri.setColor(color) }),
-  );
-  //console.log("point", point);
-
-  // position
-  point.geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(
-      [XYZ.X, XYZ.Y, XYZ.Z], // model > scaleCoords
-      3,
-    ),
-  );
-
-  // name, visible, userData, layers
-  Object.assign(point, {
+  const point: THREE.Points = myTri.getPoint({
     name: `Joint-${Joint}`,
-    visible: true,
-    userData: {
-      id: id,
-      type: "Joint", // point
-      originalColor: color,
-      label: Joint, // `${ Joint}`
-    },
+    vertex: XYZ,
+    scale: scale,
+    color: color,
+    size: size,
+    //visible:true,
   });
-  //point.layers.set( myViewerInstance.layer);
 
-  // add point to scene
-  // myViewerInstance.scene.add(point);
+  // label
+  const label: THREE.Sprite | undefined = myTri.getLabel({
+    name: `Joint-${Joint}-Label`,
+    text: Joint,
+    vertex: XYZ,
+    scale: scale,
+    color: labelColor,
+  });
 
-  // store
-  // point = point;
-
-  // add label to group
-  // addLabel();
-
-  return point;
+  //
+  return { point: point, label: label };
 };
 
-const play = () => {
+// -------------
+// play()
+// -------------
+const play = async () => {
   //console.log("play");
 
   // clear
@@ -338,39 +380,85 @@ const play = () => {
 
   console.olog("play");
 
+  //
+  // Groups
+  //
+  console.olog("--------------------------");
+  for (const Group of Groups) {
+    console.olog(`Group: ${Group}`);
+
+    const group: THREE.Group | undefined = myTri.getGroup({
+      name: Group,
+      visible: true,
+    });
+    if (group) scene.add(group);
+  }
+
+  //
+  // Grids
+  // CoordSys AxisDir GridID XRYZCoord LineType LineColor Visible BubbleLoc AllVisible BubbleSize
+  //
+  console.olog("--------------------------");
+  let BubbleSize: number = 1 / options.value.scaleUnits[1];
+  const GridLines = data.value["Grid Lines"].records;
+  for (let i = 0; i < GridLines.length; i++) {
+    const record = GridLines[i];
+
+    if (record.AxisDir === "Z") continue;
+    if (record.BubbleSize) BubbleSize = record.BubbleSize;
+    console.olog(
+      `Grid-${record.GridID} : (${record.AxisDir}, ${record.XRYZCoord}, ${BubbleSize})`,
+    );
+
+    const { line, label } = await addGrid({
+      GridID: record.GridID,
+      AxisDir: record.AxisDir,
+      XRYZCoord: record.XRYZCoord,
+      BubbleSize: BubbleSize,
+    });
+
+    if (line && label) {
+      const group = scene.getObjectByName("grids");
+      if (group) {
+        group.add(line);
+        group.add(label);
+      }
+    }
+  }
+
+  //
   // Joints
+  //
+  console.olog("--------------------------");
   const JointCoordinates = data.value["Joint Coordinates"].records;
   for (let i = 0; i < JointCoordinates.length; i++) {
     const record = JointCoordinates[i];
-    console.log(
+    console.olog(
       `Joint-${record.Joint} : (${record.XorR}, ${record.Y}, ${record.Z})`,
     );
 
-    /*
-    const scale = {
-      X: options.value.scaleUnits[1],
-      Y: options.value.scaleUnits[1],
-      Z: options.value.scaleUnits[1],
-    };
-    */
-    //console.log(`scaleUnits: ${options.value.scaleUnits}`);
-
-    const point: THREE.Points | undefined = addJoint({
-      Joint: record.Joint,
-      XYZ: {
-        X: record.XorR * options.value.scaleUnits[1],
-        Y: record.Z * options.value.scaleUnits[1],
-        Z: record.Y * options.value.scaleUnits[1],
-      },
-    });
+    const {
+      point,
+      label,
+    }: { point: THREE.Points | undefined; label: THREE.Sprite | undefined } =
+      addJoint({
+        Joint: record.Joint,
+        XYZ: { X: record.XorR, Y: record.Z, Z: record.Y },
+      });
     if (point) scene.add(point);
+
+    if (label) {
+      const group = scene.getObjectByName("jointsLabels");
+      if (group) group.add(label);
+    }
   }
 
   // Frames
+  console.olog("--------------------------");
   const ConnectivityFrame = data.value["Connectivity - Frame"].records;
   for (let i = 0; i < ConnectivityFrame.length; i++) {
     const { Frame, JointI, JointJ } = ConnectivityFrame[i];
-    console.log(`Frame-${Frame} : (${JointI}, ${JointJ})`);
+    console.olog(`Frame-${Frame} : (${JointI}, ${JointJ})`);
 
     const start = JointCoordinates.find((k: any) => k.Joint === JointI);
     const end = JointCoordinates.find((k: any) => k.Joint === JointJ);
@@ -385,16 +473,19 @@ const play = () => {
       Z: options.value.scaleUnits[1],
     };
 
-    const line: THREE.Line | undefined = addLine({
+    const line: THREE.Line | undefined = myTri.getLine({
       name: `Frame-${Frame}`,
       vertex: vertex,
       scale: scale,
+      color: Settings?.frames?.color,
     });
     if (line) scene.add(line);
   }
 };
 
+// -------------
 // clear scene
+// -------------
 const clear = () => {
   console.olog("clear");
   myTri.clear(scene);
@@ -408,6 +499,22 @@ const clear = () => {
   scene.add(directionalLight);
 
   scene.add(myTri.setAxesHelper({}));
+};
+
+// -------------
+// set object visibility
+// -------------
+const setObjectVisible = (
+  name: string | undefined = undefined,
+  visible: boolean | undefined = undefined,
+) => {
+  if (!name) return;
+
+  myTri.setObjectVisible({
+    scene,
+    name: name,
+    visible: visible,
+  });
 };
 </script>
 
