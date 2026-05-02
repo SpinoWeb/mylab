@@ -71,7 +71,7 @@ async function fetchSerpApiCompressed(query: string = myQuery) {
 
     loading.value = false;
   } catch (error) {
-    console.error(error.message);
+    console.error(error);
   }
 }
 </script>

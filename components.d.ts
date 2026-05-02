@@ -16,6 +16,7 @@ declare module 'vue' {
     ConsoleLog: typeof import('./src/components/ConsoleLog.vue')['default']
     Copia: typeof import('./src/components/Gantt - Copia.vue')['default']
     DataTable: typeof import('primevue/datatable')['default']
+    Dialog: typeof import('primevue/dialog')['default']
     Gantt: typeof import('./src/components/Gantt.vue')['default']
     Home: typeof import('./src/components/Home.vue')['default']
     MultiSelect: typeof import('primevue/multiselect')['default']

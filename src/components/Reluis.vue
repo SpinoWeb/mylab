@@ -132,7 +132,7 @@ async function fetchReluisApi() {
 
     loading.value = false;
   } catch (error) {
-    console.error(error.message);
+    console.error(error);
   }
 }
 

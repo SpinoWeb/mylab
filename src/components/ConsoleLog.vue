@@ -1,11 +1,11 @@
 <template>
   <div
-    id="my-console-log"
+    id="console-olog"
     class="absolute bottom-2 right-2 w-1/4 h-[160px] overflow-y-auto text-left p-2 z-99"
   >
     <!-- toolbar -->
-    <div class="flex flex-row border-bottom-1">
-      <mdicon name="close" class="icon" :disabled="loading" @click="clear" />
+    <div class="flex flex-row gap-2 border-bottom-1">
+      <i class="pi pi-times m-1 icon" :disabled="loading" @click="clear" />
     </div>
 
     <!-- loading -->
@@ -14,77 +14,47 @@
       style="height: 2px"
     />
 
-    <!-- log -->
-    <div v-for="i in list" class="flex flex-row gap-2">
-      <span v-html="i" class="w-full text-sm" />
+    <!-- olog -->
+    <div v-for="o in olog" class="flex flex-row gap-2">
+      <span v-html="o" class="w-full text-sm" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { toRef, ref, computed } from "vue";
-
-import { inject } from "vue";
-const darkMode = inject("darkMode");
+import { toRef, ref } from "vue";
 
 // props
 interface Props {
   modelValue?: any;
-  loading?: boolean;
   options?: any;
+  loading?: boolean;
 }
 const props = withDefaults(defineProps<Props>(), {
   modelValue: () => [],
+  options: () => {},
   loading: false,
-  options: () => {
-    return {
-      bottom: 4,
-      right: 4,
-      width: 288,
-      height: 160,
-    };
-  },
 });
 
 // toRef
 const loading = toRef(props, "loading");
-const options = toRef(props, "options");
+//const options = toRef(props, "options");
 
 // ref
-const list = ref<string[]>([]);
+const olog = ref<string[]>([]);
 
-const style = computed(
-  () =>
-    `position: absolute; bottom: ${options.value.bottom}px; right: ${options.value.right}px;
-     width: ${options.value.width}px; height: ${options.value.height}px;
-     overflow-y: auto; scrollbar-color: white black; scrollbar-width: thin;
-     padding: 4px;
-     text-align: left; color: ${darkMode ? "#424242" : "#EEE"}; font-size: 0.85rem; font-family: monospace;
-     display: flex; flex-direction: column; gap: 0.25rem`,
-);
+const clear = () => (olog.value = []);
 
-const clear = () => (list.value = []);
-
+//
+// add custom property to window.console
+//
 Object.assign(window.console, {
-  log: function (str: string) {
-    /*
-    let node = document.createElement("div");
-    node.classList.add("log");
-    //node.setAttribute("class", "log");
-    node.textContent = str;
-    document?.getElementById("my-console-log")?.prepend(node); // .appendChild(node)
-    */
-    list.value.unshift(str);
-  },
+  //log: (str: string) => olog.value.unshift(str),
+  olog: (str: string) => olog.value.unshift(str),
 });
 </script>
 
 <style scoped>
-.log {
-  width: 100%;
-  text-align: left;
-}
-
 .icon {
   cursor: pointer;
 }

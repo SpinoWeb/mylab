@@ -6,103 +6,78 @@
         v-model="job"
         :options="jobs"
         placeholder="Select a Job"
-        class="w-1/4"
+        class="w-1/6"
         :disabled="loading"
         @change="getDataFromXlsx"
       />
-      <!-- select table -->
-      <Select
-        v-model="table"
-        :options="tables"
-        optionLabel="label"
-        optionValue="key"
-        placeholder="Select a Table"
-        class="w-1/4"
+
+      <!-- actions -->
+      <Button
+        icon="pi pi-database"
+        @click="dialogVisible = true"
         :disabled="loading"
+      />
+
+      <!-- loading -->
+      <div class="mt-2">
+        <i
+          :class="`pi pi-spin ${loading ? 'pi-spinner' : null}`"
+          style="font-size: 1.5rem"
+        />
+      </div>
+
+      <div class="mt-2">{{ CurrUnits }}</div>
+    </div>
+
+    <div>
+      <TriViewer
+        v-model="data"
+        :loading="loading"
+        :options="{ scaleUnits: scaleUnits }"
       />
     </div>
 
-    <Tabs value="1">
-      <TabList>
-        <Tab value="0">Tables</Tab>
-        <Tab value="1">Tri</Tab>
-      </TabList>
-      <TabPanels>
-        <TabPanel value="0">
-          <div class="flex flex-col gap-2">
-            <div class="flex flex-row gap-2">
-              <!-- select job -->
-              <Select
-                v-model="job"
-                :options="jobs"
-                placeholder="Select a Job"
-                class="w-full md:w-56"
-                :disabled="loading"
-                @change="getDataFromXlsx"
-              />
-
-              <!-- select table -->
-              <Select
-                v-model="table"
-                :options="tables"
-                optionLabel="label"
-                optionValue="key"
-                placeholder="Select a Table"
-                class="w-full md:w-56"
-                :disabled="loading"
-              />
-            </div>
-
-            <!-- loading -->
-            <ProgressBar
-              :mode="loading ? 'indeterminate' : 'determinate'"
-              style="height: 2px"
-            />
-
-            <DataTable
-              v-if="table"
-              :value="tableData.records"
-              :loading="loading"
-              size="small"
-              tableStyle="min-width: 50rem"
-              scrollable
-              scrollHeight="500px"
-            >
-              <template #header>
-                <div class="text-left">
-                  {{ `${tableData.table} (${tableData.records.length})` }}
-                </div>
-              </template>
-              <Column
-                v-for="key in tableData.keys"
-                :field="key"
-                :header="key"
-              />
-            </DataTable>
-
-            <vue-json-pretty
-              v-if="false"
-              :data="tableData"
-              :showIcon="true"
-              :showLength="true"
-              :collapsed-node-length="2"
-              :theme="darkMode ? 'dark' : 'light'"
-            />
-          </div>
-        </TabPanel>
-        <TabPanel value="1">
-          <TriViewer v-model="data" :options="{ scaleUnits: scaleUnits }" />
-        </TabPanel>
-      </TabPanels>
-    </Tabs>
+    <div class="h-0">
+      <Dialog
+        v-model:visible="dialogVisible"
+        header="Flex Scroll"
+        :style="{ width: '75vw' }"
+        maximizable
+        modal
+        :contentStyle="{ height: '420px' }"
+      >
+        <template #header>
+          <!-- select table -->
+          <Select
+            v-model="table"
+            :options="tables"
+            optionLabel="label"
+            optionValue="key"
+            placeholder="Select a Table"
+            class="w-1/4"
+            :disabled="loading"
+          />
+        </template>
+        <DataTable
+          :value="tableData.records"
+          :loading="loading"
+          size="small"
+          tableStyle="min-width: 50rem"
+          scrollable
+          scrollHeight="380px"
+        >
+          <Column v-for="key in tableData.keys" :field="key" :header="key" />
+        </DataTable>
+      </Dialog>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from "vue";
 
-import VueJsonPretty from "vue-json-pretty";
-import "vue-json-pretty/lib/styles.css";
+//import VueJsonPretty from "vue-json-pretty";
+//import "vue-json-pretty/lib/styles.css";
 
 import ExcelJS from "exceljs";
 
@@ -124,6 +99,7 @@ const jobs: string[] = [
 const job = ref<string | undefined>();
 const data = ref<MyData>({});
 const loading = ref<boolean>(false);
+const dialogVisible = ref<boolean>(false);
 const table = ref<string | undefined>();
 const tables = computed((): any[] => {
   return Object.keys(data.value).map((key: string) => {
@@ -131,7 +107,10 @@ const tables = computed((): any[] => {
   });
 });
 const tableData = computed(
-  (): MyData => (table.value ? data.value[table.value] : {}),
+  (): MyData =>
+    table.value
+      ? data.value[table.value]
+      : { table: "", keys: [], units: [], records: [] },
 );
 //const getTableData = () => Promise.resolve(table.value ? data.value[table.value] : {});
 

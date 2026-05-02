@@ -5,8 +5,8 @@
     class="my-viewer-container"
   >
     <div class="absolute top-0 left-0 flex flex-column gap-2 p-2">
-      <Button label="play" @click="play" />
-      <Button label="clear" @click="clear" />
+      <Button label="play" :disabled="loading" @click="play" />
+      <Button label="clear" :disabled="loading" @click="clear" />
     </div>
     <div class="absolute top-0 right-0 h-[300px] overflow-y-auto p-2 w-1/3">
       <VueJsonPretty
@@ -16,7 +16,7 @@
         :showIcon="true"
       />
     </div>
-    <ConsoleLog />
+    <ConsoleLog :loading="loading" />
   </div>
 </template>
 
@@ -61,19 +61,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 // toRef
 const data = toRef(props, "modelValue");
-const loading = toRef(props, "loading");
 const options = toRef(props, "options");
+const loading = toRef(props, "loading");
 
 import { inject } from "vue";
 //const darkMode = inject("darkMode");
 const darkMode = inject("darkMode", true);
-
-// setColor
-const setColor = (colorHex: string = "#B00020"): THREE.Color => {
-  let color: THREE.Color = new THREE.Color();
-  color.set(colorHex);
-  return color;
-};
 
 // setPalette
 const palette = ref();
@@ -84,20 +77,20 @@ const setPalette = (dark: boolean = true) => {
 setPalette(darkMode);
 
 const scene: THREE.Scene = new THREE.Scene();
-scene.background = setColor(palette.value.black);
+scene.background = myTri.setColor(palette.value.black);
 
 watch(darkMode, (n: any) => {
   //console.log(`darkMode: ${n}`);
   setPalette(n);
   //console.warn(`palette: ${palette.value.black}`);
-  scene.background = setColor(palette.value.black);
+  scene.background = myTri.setColor(palette.value.black);
 });
 
-watch(data, (n: any) => {
+watch(data, () => {
   console.log(`data updating...`);
   //console.log(`data: ${JSON.stringify(n)}`);
-  //clear();
-  play();
+  clear();
+  //play();
 });
 
 onMounted(async () => {
@@ -306,7 +299,7 @@ const addLine = ({
       { X: 1, Y: 1, Z: 1 },
     ];
   if (!scale) scale = { X: 1, Y: 1, Z: 1 };
-  const myColor: THREE.Color = color ? setColor(color) : setColor();
+  const myColor: THREE.Color = color ? myTri.setColor(color) : myTri.setColor();
   if (!linewidth) linewidth = 1;
   if (!visible) visible = true;
   if (!dashed) dashed = false;
@@ -368,7 +361,7 @@ const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
   // point
   const point: THREE.Points = new THREE.Points(
     new THREE.BufferGeometry(),
-    new THREE.PointsMaterial({ size: size, color: setColor(color) }),
+    new THREE.PointsMaterial({ size: size, color: myTri.setColor(color) }),
   );
   //console.log("point", point);
 
@@ -407,10 +400,12 @@ const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
 };
 
 const play = () => {
-  console.log("play");
+  //console.log("play");
 
   // clear
   clear();
+
+  console.olog("play");
 
   // Joints
   const JointCoordinates = data.value["Joint Coordinates"].records;
@@ -470,7 +465,7 @@ const play = () => {
 
 // clear scene
 const clear = () => {
-  console.log("clear");
+  console.olog("clear");
   myTri.clear(scene);
 
   // re-init
@@ -492,8 +487,8 @@ const clear = () => {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: calc(100vh - 176px);
-  /* min-height: 520px;*/
+  height: calc(100vh - 156px);
+  /* min-height: 500px;*/
   /* border: 1px solid; */
 }
 </style>
