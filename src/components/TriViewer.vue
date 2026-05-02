@@ -8,14 +8,7 @@
       <Button label="play" :disabled="loading" @click="play" />
       <Button label="clear" :disabled="loading" @click="clear" />
     </div>
-    <div class="absolute top-0 right-0 h-[300px] overflow-y-auto p-2 w-1/3">
-      <VueJsonPretty
-        :data="data"
-        :collapsedNodeLength="1"
-        :showLength="true"
-        :showIcon="true"
-      />
-    </div>
+
     <ConsoleLog :loading="loading" />
   </div>
 </template>
@@ -23,9 +16,6 @@
 <script setup lang="ts">
 import { ref, toRef, onMounted, watch } from "vue";
 import { v4 as uuidv4 } from "uuid";
-
-import VueJsonPretty from "vue-json-pretty";
-import "vue-json-pretty/lib/styles.css";
 
 import ConsoleLog from "./ConsoleLog.vue";
 
@@ -98,68 +88,9 @@ onMounted(async () => {
   setTimeout(() => init(), 200);
 });
 
-//
-/*
-const initModel = async () => {
-  console.log("initModel");
-
-  const container = document.getElementById(
-    "my-viewer-container",
-  ) as HTMLDivElement;
-  if (!container) throw new Error("Missing #my-viewer-container container");
-
-  const w: number = container.clientWidth,
-    h: number = container.clientHeight;
-  console.log(`w, h : ${w} ${h}`);
-
-  //const scene = new THREE.Scene();
-  //scene.background = new THREE.Color(0xf3f4f6);
-
-  const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
-  camera.position.set(0, 5, 10);
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(w, h);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  container?.appendChild(renderer.domElement);
-
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.target.set(0, 0.8, 0);
-  controls.update();
-
-  //scene.add(new THREE.GridHelper(20, 20, 0x9ca3af, 0xd1d5db));
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  scene.add(ambientLight);
-
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(5, 8, 3);
-  scene.add(directionalLight);
-
-  // Initialize OpenGeometry
-
-  // Animation loop
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-  }
-
-  animate();
-
-  // Handle window resize
-  window.addEventListener("resize", () => {
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  });
-};
-*/
-
 // init
 const init = async () => {
-  console.log("init");
+  console.olog("init");
 
   const container = document.getElementById(
     "my-viewer-container",
@@ -168,7 +99,7 @@ const init = async () => {
 
   const w: number = container.clientWidth,
     h: number = container.clientHeight;
-  console.log(`container > w, h : ${w} ${h}`);
+  console.olog(`container > w, h : ${w} ${h}`);
 
   // set camera
   const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);

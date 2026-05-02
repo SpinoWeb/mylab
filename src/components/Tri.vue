@@ -83,8 +83,8 @@ import ExcelJS from "exceljs";
 
 import TriViewer from "./TriViewer.vue";
 
-import { inject } from "vue";
-const darkMode = inject("darkMode");
+//import { inject } from "vue";
+//const darkMode = inject("darkMode");
 
 import { MyData } from "../services/Types";
 
