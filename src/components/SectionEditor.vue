@@ -348,7 +348,7 @@ const palette = computed(() =>
     ? { black: "#FFF", gray: "#424242" }
     : { black: "#000", gray: "#D3D3D3" },
 );
-const sizeHeight = computed(() => `${(3 * size.value[1]) / 4}px`);
+const sizeHeight = computed(() => `${0.8 * size.value[1]}px`);
 const scale4svg = computed((): [number, number, number] => [
   scaleUnits.value[0],
   scaleUnits.value[1] * 1e3,
@@ -637,11 +637,11 @@ const quotes = computed(() => {
         />
       </div>
 
-      <div v-if="section">
+      <div v-if="section" class="overflow-y-auto">
         <Tabs value="geometry" scrollable>
           <TabList>
-            <Tab value="geometry">geometry</Tab>
-            <Tab value="properties">properties</Tab>
+            <Tab value="geometry">geo</Tab>
+            <Tab value="properties">props</Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="geometry">
@@ -750,7 +750,6 @@ const quotes = computed(() => {
   border-radius: 0.3rem;
   width: 320px;
   height: v-bind(sizeHeight);
-  overflow-y: auto;
 }
 
 /* text */

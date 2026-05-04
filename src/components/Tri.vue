@@ -50,7 +50,7 @@
         :style="{ width: '85vw' }"
         maximizable
         modal
-        :contentStyle="{ height: '480px' }"
+        :contentStyle="{ minHeight: '480px', height: '95vh' }"
       >
         <template #header>
           <!-- select table -->
@@ -70,7 +70,7 @@
           size="small"
           tableStyle="min-width: 50rem"
           scrollable
-          scrollHeight="380px"
+          maximizable
         >
           <Column v-for="key in tableData.keys" :field="key" :header="key" />
         </DataTable>
@@ -85,7 +85,7 @@
         modal
         :style="{ width: '85vw' }"
         maximizable
-        :contentStyle="{ height: '480px' }"
+        :contentStyle="{ minHeight: '480px', height: '95vh' }"
       >
         <template #header>
           <div class="inline-flex items-center justify-center gap-2">
@@ -121,6 +121,7 @@ import SectionEditor from "./SectionEditor.vue";
 //const darkMode = inject("darkMode");
 
 import { DataTri } from "../services/Types";
+import { height } from "highcharts";
 
 // const
 const jobs: string[] = [

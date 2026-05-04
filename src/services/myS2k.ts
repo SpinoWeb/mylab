@@ -98,7 +98,7 @@ export const myS2k = {
       polygons.push({ points: points });
     }
 
-    if (Shape == "Tee") {
+    if (Shape === "Tee") {
       //const hw: number = t3 - tf;
       let points: Point2D[] = [];
 
@@ -156,7 +156,7 @@ export const myS2k = {
       polygons.push({ points: points });
     }
 
-    if (Shape == "Box/Tube") {
+    if (Shape === "Box/Tube") {
       //const hw: number = t3 - 2 * tf;
       let points: Point2D[] = [];
 
@@ -273,7 +273,7 @@ export const myS2k = {
       polygons.push({ points: points });
     }
 
-    //console.log("S2k > getPolygons", polygons);
+    //console.log("myS2k > getPolygons", polygons);
     return polygons;
   },
 
@@ -490,6 +490,7 @@ export const myS2k = {
         ix_origin: ix_origin,
         iy_origin: iy_origin,
         ixy_origin: ixy_origin,
+        //
         ix: ix_origin - area * cY * cY,
         iy: iy_origin - area * cX * cX,
         ixy: ixy_origin - area * cY * cX,

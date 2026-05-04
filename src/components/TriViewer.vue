@@ -407,7 +407,7 @@ const play = async () => {
     if (record.AxisDir === "Z") continue;
     if (record.BubbleSize) BubbleSize = record.BubbleSize;
     console.olog(
-      `Grid-${record.GridID} : (${record.AxisDir}, ${record.XRYZCoord}, ${BubbleSize})`,
+      `Grid: ${record.GridID} > (${record.AxisDir}, ${record.XRYZCoord}, ${BubbleSize})`,
     );
 
     const { line, label } = await addGrid({
@@ -434,7 +434,7 @@ const play = async () => {
   for (let i = 0; i < JointCoordinates.length; i++) {
     const record = JointCoordinates[i];
     console.olog(
-      `Joint-${record.Joint} : (${record.XorR}, ${record.Y}, ${record.Z})`,
+      `Joint: ${record.Joint} > (${record.XorR}, ${record.Y}, ${record.Z})`,
     );
 
     const {
@@ -458,7 +458,7 @@ const play = async () => {
   const ConnectivityFrame = data.value["Connectivity - Frame"].records;
   for (let i = 0; i < ConnectivityFrame.length; i++) {
     const { Frame, JointI, JointJ } = ConnectivityFrame[i];
-    console.olog(`Frame-${Frame} : (${JointI}, ${JointJ})`);
+    console.olog(`Frame: ${Frame} > (${JointI}, ${JointJ})`);
 
     const start = JointCoordinates.find((k: any) => k.Joint == JointI);
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
