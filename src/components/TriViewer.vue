@@ -27,7 +27,6 @@
 
 <script setup lang="ts">
 import { ref, toRef, onMounted, watch } from "vue";
-import { v4 as uuidv4 } from "uuid";
 
 import ConsoleLog from "./ConsoleLog.vue";
 
@@ -119,6 +118,7 @@ const setPalette = (dark: boolean = true) => {
 };
 setPalette(darkMode);
 
+//
 const scene: THREE.Scene = new THREE.Scene();
 scene.background = myTri.setColor(palette.value.black);
 
@@ -460,8 +460,8 @@ const play = async () => {
     const { Frame, JointI, JointJ } = ConnectivityFrame[i];
     console.olog(`Frame-${Frame} : (${JointI}, ${JointJ})`);
 
-    const start = JointCoordinates.find((k: any) => k.Joint === JointI);
-    const end = JointCoordinates.find((k: any) => k.Joint === JointJ);
+    const start = JointCoordinates.find((k: any) => k.Joint == JointI);
+    const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
     const vertex = [
       { X: start.XorR, Y: start.Z, Z: start.Y },

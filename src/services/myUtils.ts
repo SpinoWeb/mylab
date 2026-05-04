@@ -1,0 +1,43 @@
+//
+// myUtils.ts
+//
+
+export const myUtils = {
+  //
+  // chech debug / development mode
+  //
+  debug() {
+    //return process.env.NODE_ENV === "development" ? true : false;
+    return import.meta.env.DEV;
+  },
+
+  //
+  // clone object / array
+  //
+  deepClone(obj: any = {}) {
+    return JSON.parse(JSON.stringify(obj));
+  },
+
+  //
+  // generate uuid of custom number of chars
+  //
+  uuid(len: number = -1) {
+    //console.log("Utils > uuid", len);
+    const numberOfChars = len ? (len > 0 && len <= 36 ? len : 36) : 36;
+    //console.log("Utils > uuid", len, numberOfChars);
+    // c13b68cc-64cd-4a23-9f04-bf5325347466
+
+    let dt = new Date().getTime();
+    let uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        const r = ((dt + Math.random() * 16) % 16) | 0;
+        dt = Math.floor(dt / 16);
+        return (c == "x" ? r : (r & 0x3) | 0x8).toString(16);
+      },
+    );
+
+    //console.log("Mixin > _create_UUID > uuid", uuid);
+    return uuid.substring(0, numberOfChars);
+  },
+};
