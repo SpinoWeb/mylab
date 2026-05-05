@@ -6,8 +6,6 @@ export const myUtils = {
   //
   colors() {
     return {
-      background: "#FFFFFF",
-      surface: "#FFFFFF",
       primary: "#6200EE",
       secondary: "#03DAC6",
       error: "#B00020",

@@ -64,39 +64,6 @@ const Groups: string[] = [
   "tendons",
 ];
 
-//
-// Settings
-//
-const Settings = {
-  grids: {
-    color: "#696",
-    linewidth: 1,
-    labelColor: "#696",
-  },
-  joints: {
-    size: 0.3,
-    color: "#FB8C00",
-    labelColor: "#FB8C00",
-  },
-  frames: {
-    color: "#2196F3",
-    linewidth: 0.2,
-    extrudeOpacity: 0.7,
-    extrudeColor: "#2196F3",
-    labelColor: "#2196F3",
-  },
-  links: {
-    color: "#B00020",
-    linewidth: 0.5,
-    labelColor: "#B00020",
-  },
-  tendons: {
-    color: "#6200EE",
-    linewidth: 0.3,
-    labelColor: "#6200EE",
-  },
-};
-
 // props
 interface Props {
   modelValue?: any;
@@ -137,9 +104,44 @@ const darkMode = inject("darkMode", true);
 const palette = ref();
 const setPalette = (dark: boolean = true) => {
   //console.log(`setPalette > dark: ${dark}`);
-  palette.value = dark ? { black: "#424242" } : { black: "#EEE" };
+  palette.value = dark
+    ? { black: "#424242", gray: "#868e96" }
+    : { black: "#eee", gray: "#f8f9fa" };
 };
 setPalette(darkMode);
+
+//
+// Settings
+//
+const Settings = {
+  grids: {
+    color: "#4CAF50",
+    linewidth: 1,
+    labelColor: "#4CAF50",
+  },
+  joints: {
+    size: 0.3,
+    color: "#FB8C00",
+    labelColor: "#FB8C00",
+  },
+  frames: {
+    color: "#2196F3",
+    linewidth: 0.2,
+    extrudeOpacity: 0.7,
+    extrudeColor: "#2196F3",
+    labelColor: "#2196F3",
+  },
+  links: {
+    color: "#6200EE",
+    linewidth: 0.3,
+    labelColor: "#6200EE",
+  },
+  tendons: {
+    color: "#B00020",
+    linewidth: 0.5,
+    labelColor: "#B00020",
+  },
+};
 
 //
 const scene: THREE.Scene = new THREE.Scene();

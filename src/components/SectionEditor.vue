@@ -358,14 +358,24 @@ const PanMode = () => {
 };
 
 import { inject } from "vue";
-const darkMode = inject("darkMode");
+//const darkMode = inject("darkMode");
+const darkMode = inject("darkMode", true);
 
-// computed
-const palette = computed(() =>
-  darkMode
-    ? { black: "#FFF", gray: "#424242" }
-    : { black: "#000", gray: "#D3D3D3" },
-);
+// setPalette
+const palette = ref();
+const setPalette = (dark: boolean = true) => {
+  //console.log(`setPalette > dark: ${dark}`);
+  palette.value = dark
+    ? { black: "#424242", gray: "#868e96" }
+    : { black: "#eee", gray: "#f8f9fa" };
+};
+setPalette(darkMode);
+watch(darkMode, (n: any) => {
+  //console.log(`darkMode: ${n}`);
+  setPalette(n);
+  //console.warn(`palette: ${palette.value.black}`);
+});
+
 const sizeHeight = computed(() => `${0.8 * size.value[1]}px`);
 const scale4svg = computed((): [number, number, number] => [
   scaleUnits.value[0],
@@ -530,7 +540,7 @@ const quotes = computed(() => {
           :height="size[1] * z"
           fill="url(#grid)"
         />
-        <g v-if="myUtils.debug() && false">
+        <g v-if="myUtils.debug()">
           <!-- center -->
           <circle
             :cx="viewport.X / 2 - options.camera.x / z"
@@ -561,7 +571,7 @@ const quotes = computed(() => {
           y1="0"
           :x2="options.snapGrid / 2"
           y2="0"
-          :stroke="palette.black"
+          :stroke="palette.gray"
           stroke-width="3"
         />
         <line
@@ -569,7 +579,7 @@ const quotes = computed(() => {
           y1="0"
           x2="0"
           :y2="options.snapGrid / 2"
-          :stroke="palette.black"
+          :stroke="palette.gray"
           stroke-width="3"
         />
         <!-- polygons -->
