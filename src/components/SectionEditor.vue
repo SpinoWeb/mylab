@@ -6,11 +6,12 @@ import {
   computed,
   onMounted,
   onUnmounted,
+  watch,
   //markRaw,
   //defineAsyncComponent,
 } from "vue";
 
-import { Listener, Point2D } from "../services/Types";
+import { Listener, Point2D, Polygon, Section } from "../services/Types";
 
 import { myUtils } from "../services/myUtils";
 import { mySvg } from "../services/mySvg";
@@ -20,6 +21,7 @@ import { myS2k } from "../services/myS2k";
 // emit
 const emit = defineEmits([
   "update:sections",
+  "update:polygons",
   "update:options",
   //"action",
   //"selectedElement",
@@ -32,7 +34,8 @@ const SvgBoardID: string = `SvgBoard-${myUtils.uuid(8)}`;
 
 // props
 interface Props {
-  sections?: any[];
+  sections?: Section[];
+  polygons?: Polygon[];
   options?: any;
   scaleUnits?: [number, number, number];
   //readOnlyElements?: any[];
@@ -40,6 +43,7 @@ interface Props {
 }
 const props = withDefaults(defineProps<Props>(), {
   sections: () => [],
+  polygons: () => [],
   options: () => {},
   scaleUnits: () => [1, 1, 1],
   //readOnlyElements: () => [],
@@ -47,15 +51,29 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 // toRef
-//const section = toRef(props, "section");
 const sections = toRef(props, "sections");
+const polygons = toRef(props, "polygons");
 const options = toRef(props, "options");
 const scaleUnits = toRef(props, "scaleUnits");
 //const readOnlyElements = toRef(props, "readOnlyElements");
 const size = toRef(props, "size");
 
 // ref
-const section = ref<any>();
+const section = ref<Section | undefined>();
+const s2kSDSectionPolygons = ref<Polygon[]>([]);
+
+// polygons for s2k "SD Section"
+const getSDSectionPolygons = (section: Section | undefined) => {
+  if (!section) return;
+
+  s2kSDSectionPolygons.value =
+    section.Shape === "SD Section"
+      ? polygons.value.filter(
+          (p: Polygon) => p.SectionName === section.SectionName,
+        )
+      : [];
+};
+watch(section, (n) => getSDSectionPolygons(n));
 
 //
 const width = ref<number>(800);
@@ -374,45 +392,68 @@ const viewport = computed((): Point2D => {
 
 // keys
 const keys = computed(() => {
+  if (!section.value) return [];
+
   const { Shape } = section.value;
   return Shape !== undefined ? myS2k.getKeys({ Shape }) : [];
 });
 
 // polygons for svg
-const polygons = computed(() => {
-  let polygons: any[] = [];
+const svgPolygons = computed(() => {
+  let svgPolygons: Polygon[] = [];
   // m to mm
+  if (!section.value) return svgPolygons;
+  const Shape: string = section.value.Shape;
 
-  for (const polygon of myS2k.getPolygons({
-    section: section.value,
-    X0: options.value.snapGrid / scale4svg.value[1],
-    Y0: options.value.snapGrid / scale4svg.value[1],
-  })) {
-    //console.log("SectionEditor > polygons", polygon);
+  // init getPolygons array
+  let getPolygons: Polygon[] = [];
+
+  if (Shape === "SD Section") {
+    // "YES" SD Section
+    getPolygons = myS2k.getSDSectionPolygons({
+      Section: section.value,
+      Polygons: polygons.value,
+      //Materials: [],
+      X0: options.value.snapGrid / scale4svg.value[1],
+      Y0: options.value.snapGrid / scale4svg.value[1],
+    });
+  } else {
+    // "NO" SD Section
+    getPolygons = myS2k.getPolygons({
+      section: section.value,
+      X0: options.value.snapGrid / scale4svg.value[1],
+      Y0: options.value.snapGrid / scale4svg.value[1],
+    });
+  }
+
+  // loop getPolygons
+  //
+  for (const polygon of getPolygons) {
+    //console.log("SectionEditor > svgPolygons", polygon);
     let points4polygon: string = "";
-    polygon.points.map(
+    polygon.points?.map(
       (p: Point2D) =>
         (points4polygon += `${p.X * scale4svg.value[1]},${p.Y * scale4svg.value[1]} `),
     );
-    polygons.push(
+    svgPolygons.push(
       Object.assign(polygon, {
         scale: polygon.hasOwnProperty("scale") ? polygon.scale : 1,
         points4polygon: points4polygon,
-        fill: polygon.hasOwnProperty("fill")
-          ? polygon.fill
+        FillColor: polygon.hasOwnProperty("FillColor")
+          ? polygon.FillColor
           : palette.value.gray,
         strokeWidth: 2,
       }),
     );
   }
 
-  //console.log("polygons", polygons);
-  return polygons;
+  //console.log("svgPolygons", svgPolygons);
+  return svgPolygons;
 });
 
 // properties of polygons for svg
 const polygonsProperties = computed(() =>
-  myS2k.getPolygonsProperties(polygons.value),
+  myS2k.getPolygonsProperties(svgPolygons.value),
 );
 
 // centroid of polygons for svg
@@ -431,6 +472,8 @@ const polygonsCentroid = computed(
 // quotes for svg
 const quotes = computed(() => {
   let quotes: any[] = [];
+
+  if (!section.value) return quotes;
 
   for (const quote of myS2k.getQuotes({
     section: section.value,
@@ -531,11 +574,15 @@ const quotes = computed(() => {
         />
         <!-- polygons -->
         <polygon
-          v-for="polygon in polygons"
+          v-for="polygon in svgPolygons"
           :points="polygon.points4polygon"
           :stroke="palette.black"
           :stroke-width="polygon.strokeWidth"
-          :fill="polygon.scale < 1 ? palette.black : polygon.fill"
+          :fill="
+            !polygon.scale || polygon.scale < 1
+              ? palette.black
+              : polygon.FillColor
+          "
           fill-opacity="0.7"
         />
         <!-- centroid -->
@@ -598,7 +645,7 @@ const quotes = computed(() => {
       <ToggleSwitch v-model="options.showGrid" class="mr-1" />
       <Select
         v-model="options.snapGrid"
-        :options="[10, 25, 50]"
+        :options="[10, 25, 50, 100, 250]"
         :disabled="!options.showGrid"
         placeholder="snapGrid"
         :id="`${SvgBoardID}_snapGrid`"
@@ -657,6 +704,16 @@ const quotes = computed(() => {
                   </div>
                 </div>
                 <div class="flex flex-row gap-2">
+                  <div class="w-1/2 flex-none mt-1">Material</div>
+                  <div class="flex-1">
+                    <InputText
+                      v-model="section.Material"
+                      style="width: 100%"
+                      :disabled="true"
+                    />
+                  </div>
+                </div>
+                <div class="flex flex-row gap-2">
                   <div class="w-1/2 flex-none mt-1">Shape</div>
                   <div class="flex-1">
                     <InputText
@@ -666,6 +723,7 @@ const quotes = computed(() => {
                     />
                   </div>
                 </div>
+                <!-- "NO" SD Section-->
                 <div class="flex flex-row gap-2" v-for="i of keys">
                   <div class="w-1/2 flex-none mt-1">{{ i }}</div>
                   <div class="flex-1">
@@ -674,6 +732,39 @@ const quotes = computed(() => {
                       style="width: 100%"
                     />
                   </div>
+                </div>
+                <!-- "SI" SD Section-->
+                <div
+                  class="flex flex-col gap-2"
+                  v-for="s2kPolygon of s2kSDSectionPolygons"
+                >
+                  <div
+                    class="flex flex-row gap-2"
+                    v-for="i of [
+                      'ShapeName',
+                      'ShapeMat',
+                      'FillColor',
+                      'ZOrder',
+                    ]"
+                  >
+                    <div class="w-1/2 flex-none mt-1">{{ i }}</div>
+                    <div class="flex-1">{{ s2kPolygon[i] }}</div>
+                  </div>
+
+                  <div
+                    class="flex flex-row gap-2"
+                    v-for="point of s2kPolygon.points"
+                  >
+                    <div class="w-1/2 flex flex-row gap-2">
+                      <label>X</label>
+                      <InputText v-model.number="point.X" style="width: 100%" />
+                    </div>
+                    <div class="w-1/2 flex flex-row gap-2">
+                      <label>Y</label>
+                      <InputText v-model.number="point.Y" style="width: 100%" />
+                    </div>
+                  </div>
+                  <Divider />
                 </div>
               </div>
             </TabPanel>

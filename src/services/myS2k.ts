@@ -1,6 +1,8 @@
 // myS2k.ts
 
-import { Point2D, Section } from "./Types";
+import { myUtils } from "./myUtils";
+
+import { Point2D, Section, Material, Polygon } from "./Types";
 
 // S2k
 export const myS2k = {
@@ -14,10 +16,10 @@ export const myS2k = {
     let keys: string[] = [];
 
     if (Shape === "Rectangular") keys = ["t2", "t3"];
-    if (Shape == "Tee") keys = ["t2", "t3", "tf", "tw", "FilletRadius"];
+    if (Shape === "Tee") keys = ["t2", "t3", "tf", "tw", "FilletRadius"];
     if (Shape === "I/Wide Flange")
       keys = ["t2", "t3", "tf", "tw", "t2b", "tfb", "FilletRadius"];
-    if (Shape == "Box/Tube") keys = ["t2", "t3", "tf", "tw"];
+    if (Shape === "Box/Tube") keys = ["t2", "t3", "tf", "tw"];
 
     if (Shape === "PC Conc I Girder")
       keys = ["B1", "B2", "T1", "D1", "D2", "D3", "D5", "D6"];
@@ -30,8 +32,66 @@ export const myS2k = {
   },
 
   /**
+   * Generate cross-section points of polygons of a SD Section
+   * to calculate the cross-section properties
+   * [svg coordinates' system]
+   *
+   */
+  getSDSectionPolygons({
+    Section,
+    Polygons,
+    //Materials,
+    X0,
+    Y0,
+  }: {
+    Section: Section;
+    Polygons: Polygon[];
+    //Materials: Material[];
+    X0?: number;
+    Y0?: number;
+  }) {
+    //console.log("myS2k > getSDSectionPolygons", Section, Materials, Polygons);
+    if (!Section) return [];
+    //if (Materials.length < 1) return [];
+    if (Polygons.length < 1) return [];
+
+    // origin
+    if (!X0) X0 = 0;
+    if (!Y0) Y0 = 0;
+
+    const s2kPolygons: Polygon[] = Polygons.filter(
+      (p: Polygon) => p.SectionName === Section.SectionName,
+    );
+    //console.log("myS2k > getSDSectionPolygons > s2kPolygons", s2kPolygons);
+
+    // get yMax
+    let { yMax }: { yMax: number } = { yMax: -Number.MAX_VALUE };
+    for (const polygon of s2kPolygons) {
+      const limits = this.getPolygonLimits(polygon.points);
+      if (limits.yMax > yMax) yMax = limits.yMax;
+    }
+    //console.log("myS2k > getSDSectionPolygons > yMax", yMax);
+
+    // transform s2k to svg
+    const svgPolygons: Polygon[] = [];
+    for (const polygon of s2kPolygons) {
+      const svgPolygon: Polygon = myUtils.deepClone(polygon);
+
+      const points = svgPolygon.points?.map((p: Point2D) => {
+        return { X: X0 + p.X, Y: Y0 + (yMax - p.Y) };
+      });
+      //console.log("myS2k > getSDSectionPolygons > svgPolygon", svgPolygon);
+
+      svgPolygons.push(Object.assign(svgPolygon, { points: points }));
+    }
+
+    //console.log("myS2k > getSDSectionPolygons > svgPolygons", svgPolygons);
+    return svgPolygons;
+  },
+
+  /**
    * Generate cross-section points of polygons from s2k variables
-   * svg coordinates' system
+   * [svg coordinates' system]
    *
    */
   getPolygons({
@@ -167,7 +227,7 @@ export const myS2k = {
 
       polygons.push({ points: points });
 
-      points = [];
+      points = []; // void
       points.push({ X: X0 + tw, Y: Y0 + tf });
       points.push({ X: X0 + tw, Y: Y0 + t3 - tf });
       points.push({ X: X0 + t2 - tw, Y: Y0 + t3 - tf });
@@ -304,7 +364,7 @@ export const myS2k = {
    *
    */
   getPolygonProperties(points: Point2D[] = []) {
-    //console.log("S2k > getPolygonProperties", points);
+    //console.log("myS2k > getPolygonProperties", points);
 
     // --- Calculation Logic ---
 
@@ -508,7 +568,7 @@ export const myS2k = {
 
   /**
    * Generate quotes of polygons from s2k variables
-   * svg coordinates' system
+   * [svg coordinates' system]
    *
    */
   getQuotes({

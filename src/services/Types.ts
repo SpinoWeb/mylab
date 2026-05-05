@@ -87,6 +87,8 @@ export type Material = {
 
 // Section
 export type Section = {
+  [key: string]: any; // Permette qualsiasi altra stringa come chiave
+  //
   SectionName: string;
   Material: string;
   Shape: string;
@@ -111,14 +113,22 @@ export type Section = {
 
 // Polygon
 export type Polygon = {
+  [key: string]: any; // Permette qualsiasi altra stringa come chiave
+  //
   SectionName: string;
   ShapeName: string;
   ShapeMat: string;
-  XYR?: Point2D[];
-  X: number;
-  Y: number;
+  //
+  X?: number;
+  Y?: number;
+  //
+  points?: Point2D[];
+  scale?: number;
+  points4polygon?: string;
   //
   FillColor?: string;
+  strokeWidth?: number;
+  ShapeMatE1?: number;
 };
 
 // Area
@@ -138,7 +148,7 @@ export type Joint = {
   X: number;
   Y: number;
   Z: number;
-  XYZ?: Point3D;
+  //XYZ?: Point3D;
   //
   CoordSys?: string;
   Restraint?: string;

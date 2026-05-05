@@ -19,6 +19,18 @@
         :disabled="loading"
         @click="setObjectVisible('jointsLabels')"
       />
+      <Button
+        icon="pi pi-bolt"
+        :style="`background: ${Settings.links.color}`"
+        :disabled="loading"
+        @click="setObjectVisible('links')"
+      />
+      <Button
+        icon="pi pi-wave-pulse"
+        :style="`background: ${Settings.tendons.color}`"
+        :disabled="loading"
+        @click="setObjectVisible('tendons')"
+      />
     </div>
 
     <ConsoleLog :loading="loading" />
@@ -48,6 +60,8 @@ const Groups: string[] = [
   "framesLabels",
   "framesSolids",
   "framesLocalAxes",
+  "links",
+  "tendons",
 ];
 
 //
@@ -66,11 +80,20 @@ const Settings = {
   },
   frames: {
     color: "#2196F3",
-    //color: "#BBB",
     linewidth: 0.2,
     extrudeOpacity: 0.7,
     extrudeColor: "#2196F3",
     labelColor: "#2196F3",
+  },
+  links: {
+    color: "#B00020",
+    linewidth: 0.5,
+    labelColor: "#B00020",
+  },
+  tendons: {
+    color: "#6200EE",
+    linewidth: 0.3,
+    labelColor: "#6200EE",
   },
 };
 
@@ -389,7 +412,7 @@ const play = async () => {
 
     const group: THREE.Group | undefined = myTri.getGroup({
       name: Group,
-      visible: true,
+      visible: false,
     });
     if (group) scene.add(group);
   }
@@ -400,7 +423,9 @@ const play = async () => {
   //
   console.olog("--------------------------");
   let BubbleSize: number = 1 / options.value.scaleUnits[1];
-  const GridLines = data.value["Grid Lines"].records;
+  const GridLines = data.value.hasOwnProperty("Grids")
+    ? data.value["Grids"]
+    : [];
   for (let i = 0; i < GridLines.length; i++) {
     const record = GridLines[i];
 
@@ -430,7 +455,9 @@ const play = async () => {
   // Joints
   //
   console.olog("--------------------------");
-  const JointCoordinates = data.value["Joint Coordinates"].records;
+  const JointCoordinates = data.value.hasOwnProperty("Joints")
+    ? data.value["Joints"]
+    : [];
   for (let i = 0; i < JointCoordinates.length; i++) {
     const record = JointCoordinates[i];
     console.olog(
@@ -455,7 +482,9 @@ const play = async () => {
 
   // Frames
   console.olog("--------------------------");
-  const ConnectivityFrame = data.value["Connectivity - Frame"].records;
+  const ConnectivityFrame = data.value.hasOwnProperty("Frames")
+    ? data.value["Frames"]
+    : [];
   for (let i = 0; i < ConnectivityFrame.length; i++) {
     const { Frame, JointI, JointJ } = ConnectivityFrame[i];
     console.olog(`Frame: ${Frame} > (${JointI}, ${JointJ})`);
@@ -480,6 +509,75 @@ const play = async () => {
       color: Settings?.frames?.color,
     });
     if (line) scene.add(line);
+  }
+
+  // Links
+  console.olog("--------------------------");
+  const ConnectivityLink = data.value.hasOwnProperty("Links")
+    ? data.value["Links"]
+    : [];
+  for (let i = 0; i < ConnectivityLink.length; i++) {
+    const { Link, JointI, JointJ } = ConnectivityLink[i];
+    console.olog(`Link: ${Link} > (${JointI}, ${JointJ})`);
+
+    const start = JointCoordinates.find((k: any) => k.Joint == JointI);
+    const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
+
+    const vertex = [
+      { X: start.XorR, Y: start.Z, Z: start.Y },
+      { X: end.XorR, Y: end.Z, Z: end.Y },
+    ];
+    const scale = {
+      X: options.value.scaleUnits[1],
+      Y: options.value.scaleUnits[1],
+      Z: options.value.scaleUnits[1],
+    };
+
+    const line: THREE.Line | undefined = myTri.getLine({
+      name: `Link-${Link}`,
+      vertex: vertex,
+      scale: scale,
+      color: Settings?.links?.color,
+    });
+    //if (line) scene.add(line);
+
+    if (line) {
+      const group = scene.getObjectByName("links");
+      if (group) group.add(line);
+    }
+  }
+
+  // Tendons
+  console.olog("--------------------------");
+  const ConnectivityTendon = data.value.hasOwnProperty("Tendons")
+    ? data.value["Tendons"]
+    : [];
+  for (let i = 0; i < ConnectivityTendon.length; i++) {
+    const { Tendon, points } = ConnectivityTendon[i];
+    console.olog(`Tendon: ${Tendon} > ${points.length - 1} segments`);
+
+    const vertex: Point3D[] = points.map((i: Point3D) => {
+      return { X: i.X, Y: i.Z, Z: i.Y };
+    });
+
+    const scale = {
+      X: options.value.scaleUnits[1],
+      Y: options.value.scaleUnits[1],
+      Z: options.value.scaleUnits[1],
+    };
+
+    const line: THREE.Line | undefined = myTri.getLine({
+      name: `Tendon-${Tendon}`,
+      vertex: vertex,
+      scale: scale,
+      color: Settings?.tendons?.color,
+    });
+    //if (line) scene.add(line);
+
+    if (line) {
+      const group = scene.getObjectByName("tendons");
+      if (group) group.add(line);
+    }
   }
 };
 
