@@ -68,9 +68,9 @@ const getSDSectionPolygons = (section: Section | undefined) => {
 
   s2kSDSectionPolygons.value =
     section.Shape === "SD Section"
-      ? polygons.value.filter(
-          (p: Polygon) => p.SectionName === section.SectionName,
-        )
+      ? polygons.value
+          .filter((p: Polygon) => p.SectionName === section.SectionName)
+          .sort((a: Polygon, b: Polygon) => a.ZOrder - b.ZOrder) // b - a for reverse sort
       : [];
 };
 watch(section, (n) => getSDSectionPolygons(n));
@@ -457,6 +457,11 @@ const svgPolygons = computed(() => {
     );
   }
 
+  // Source - https://stackoverflow.com/a/1129270
+  // Posted by Wogan, modified by community. See post 'Timeline' for change history
+  // Retrieved 2026-05-06, License - CC BY-SA 4.0
+  svgPolygons.sort((a: Polygon, b: Polygon) => a.ZOrder - b.ZOrder); // b - a for reverse sort
+
   //console.log("svgPolygons", svgPolygons);
   return svgPolygons;
 });
@@ -744,38 +749,57 @@ const quotes = computed(() => {
                   </div>
                 </div>
                 <!-- "SI" SD Section-->
-                <div
-                  class="flex flex-col gap-2"
-                  v-for="s2kPolygon of s2kSDSectionPolygons"
-                >
-                  <div
-                    class="flex flex-row gap-2"
-                    v-for="i of [
-                      'ShapeName',
-                      'ShapeMat',
-                      'FillColor',
-                      'ZOrder',
-                    ]"
+                <Accordion value="0">
+                  <AccordionPanel
+                    v-for="(s2kPolygon, index) of s2kSDSectionPolygons"
+                    :value="index"
                   >
-                    <div class="w-1/2 flex-none mt-1">{{ i }}</div>
-                    <div class="flex-1">{{ s2kPolygon[i] }}</div>
-                  </div>
+                    <AccordionHeader>{{
+                      s2kPolygon.ShapeName
+                    }}</AccordionHeader>
+                    <AccordionContent>
+                      <div class="flex flex-col gap-2">
+                        <div
+                          class="flex flex-row gap-2"
+                          v-for="i of [
+                            'ShapeName',
+                            'ShapeMat',
+                            'FillColor',
+                            'ZOrder',
+                          ]"
+                        >
+                          <div class="w-1/2 flex-none mt-1">{{ i }}</div>
+                          <div class="flex-1">
+                            <InputText
+                              v-model="s2kPolygon[i]"
+                              style="width: 100%"
+                            />
+                          </div>
+                        </div>
 
-                  <div
-                    class="flex flex-row gap-2"
-                    v-for="point of s2kPolygon.points"
-                  >
-                    <div class="w-1/2 flex flex-row gap-2">
-                      <label>X</label>
-                      <InputText v-model.number="point.X" style="width: 100%" />
-                    </div>
-                    <div class="w-1/2 flex flex-row gap-2">
-                      <label>Y</label>
-                      <InputText v-model.number="point.Y" style="width: 100%" />
-                    </div>
-                  </div>
-                  <Divider />
-                </div>
+                        <div
+                          class="flex flex-row gap-2"
+                          v-for="point of s2kPolygon.points"
+                        >
+                          <div class="w-1/2 flex flex-row gap-2">
+                            <label class="mt-2">X</label>
+                            <InputText
+                              v-model.number="point.X"
+                              style="width: 100%"
+                            />
+                          </div>
+                          <div class="w-1/2 flex flex-row gap-2">
+                            <label class="mt-2">Y</label>
+                            <InputText
+                              v-model.number="point.Y"
+                              style="width: 100%"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionPanel>
+                </Accordion>
               </div>
             </TabPanel>
             <TabPanel value="properties">

@@ -11,6 +11,7 @@ export interface DataTri {
 }
 
 export interface Point2D {
+  //[key: string]: any; // Permette qualsiasi altra stringa come chiave
   X: number;
   Y: number;
 }
@@ -118,6 +119,7 @@ export type Polygon = {
   SectionName: string;
   ShapeName: string;
   ShapeMat: string;
+  ZOrder: number;
   //
   X?: number;
   Y?: number;

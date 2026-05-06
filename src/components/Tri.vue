@@ -547,6 +547,7 @@ const dataToTri = (data: DataTri = {}): DataTri => {
       //"Frame Props 01 - General",
       "Frame Props 02 - Concrete Col",
       "Frame Props 03 - Concrete Beam",
+      "Frame Props 05 - Nonprismatic",
       "Frame Props 08 - PCC I Girder",
       "Frame Props 13 - Time Dependent",
       "Frame Props 14 - Tendon Data",
