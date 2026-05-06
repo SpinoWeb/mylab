@@ -11,6 +11,7 @@ const tests = ref([
   { route: "/reluis", icon: "pi pi-chart-bar", label: "Reluis" },
   { route: "/serpapi", icon: "pi pi-chart-bar", label: "SerpApi" },
   { route: "/tri", icon: "pi pi-box", label: "Tri" },
+  { route: "/that-open", icon: "pi pi-apple", label: "ThatOpen" },
 ]);
 </script>
 
