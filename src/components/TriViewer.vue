@@ -400,6 +400,8 @@ const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
 const play = async () => {
   //console.log("play");
 
+  //loading.value = true;
+
   // clear
   clear();
 
@@ -581,6 +583,8 @@ const play = async () => {
       if (group) group.add(line);
     }
   }
+
+  //loading.value = false;
 };
 
 // -------------
