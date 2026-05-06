@@ -453,6 +453,7 @@ const svgPolygons = computed(() => {
           ? polygon.FillColor
           : palette.value.gray,
         strokeWidth: 2,
+        //stroke: palette.value.black,
       }),
     );
   }
