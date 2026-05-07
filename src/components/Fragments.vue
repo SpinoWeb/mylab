@@ -53,21 +53,21 @@ import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
 
 onMounted(async () => {
-  //await initModel();
-  setTimeout(() => init(), 200);
+  setTimeout(() => building_configurator(), 200);
 });
 
 // -------------
-// init
+// building_configurator
 // -------------
-const init = async () => {
-  console.log("init");
+const building_configurator = async () => {
+  console.log("building_configurator");
 
   const mainContainer = document.getElementById("mainContainer")!;
 
   /* MD
   ### 🌎 Setting up a Simple Scene
-  To get started, let's set up a basic ThreeJS scene. This will serve as the foundation for our application and allow us to visualize the 3D models effectively:
+  To get started, let's set up a basic ThreeJS scene.
+  This will serve as the foundation for our application and allow us to visualize the 3D models effectively:
 */
 
   const container = document.getElementById("container")!;
@@ -112,15 +112,15 @@ const init = async () => {
   world.scene.three.add(axes);
 
   /* MD
-  We will also define some settings that will be used to create the building.
-*/
+    We will also define some settings that will be used to create the building.
+  */
 
   const settings = {
-    width: 20,
-    length: 30,
-    columnLengthDistance: 5,
-    columnWidthDistance: 5,
-    floorHeight: 4,
+    width: 25,
+    length: 35,
+    columnLengthDistance: 2.5,
+    columnWidthDistance: 2.5,
+    floorHeight: 3,
     exteriorColumnWidth: 0.5,
     exteriorColumnLength: 0.5,
     interiorColumnWidth: 0.25,
@@ -134,15 +134,17 @@ const init = async () => {
   };
 
   /* MD
-  :::info Do I need @thatopen/components?
+    :::
+      info Do I need @thatopen/components?
+      Not necessarily! While @thatopen/components simplifies the process of setting up a scene,
+      you can always use plain ThreeJS to create your own custom scene setup.
+      It's entirely up to your preference and project requirements! 😉
+    :::
 
-  Not necessarily! While @thatopen/components simplifies the process of setting up a scene, you can always use plain ThreeJS to create your own custom scene setup. It's entirely up to your preference and project requirements! 😉
-
-  :::
-
-  ### 🛠️ Setting Up Fragments
-  Now, let's configure the Fragments library core. This will allow us to load models effortlessly and start manipulating them with ease:
-*/
+    ### 🛠️ Setting Up Fragments
+    Now, let's configure the Fragments library core.
+    This will allow us to load models effortlessly and start manipulating them with ease:
+  */
 
   // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg and returns a blob URL.
   // You can also pass your own URL to `fragments.init(...)` if you'd rather host the worker yourself.
@@ -193,10 +195,9 @@ const init = async () => {
   ### 📐 Setting Up a global clipping plane
   Now, let's set up a global clipping plane. We'll use it to clip the building and see inside the floors.
 
-  :::info Clipping Planes?
-
-  If you are unfamiliar with this API, check out the Clipping Planes and the ClipStyler tutorials!
-
+  :::
+    info Clipping Planes?
+    If you are unfamiliar with this API, check out the Clipping Planes and the ClipStyler tutorials!
   :::
 */
 
@@ -264,9 +265,10 @@ const init = async () => {
   };
 
   /* MD
-  ### 📂 Create a new Fragments Model
-  Now, let's create a new empty Fragments model. We'll use it to store the building geometry.
-*/
+    ### 📂 Create a new Fragments Model
+    Now, let's create a new empty Fragments model.
+    We'll use it to store the building geometry.
+  */
 
   const bytes = FRAGS.EditUtils.newModel({ raw: true });
   const model = await fragments.core.load(bytes, {
@@ -279,14 +281,12 @@ const init = async () => {
   await fragments.core.update(true);
 
   /* MD
-  ### 🧊 Setting up the Geometry Engine
-  
+  ### 🧊 Setting up the Geometry Engine  
   Now, let's set up the Geometry Engine. We'll use it to generate the building geometry.
 
-  :::warning Geometry Engine?
-
-  The Geometry Engine is a library that allows us to easily generate geometry parametrically using the Fragments API.
-
+  :::
+    warning Geometry Engine?
+    The Geometry Engine is a library that allows us to easily generate geometry parametrically using the Fragments API.
   :::
 */
 
@@ -297,13 +297,14 @@ const init = async () => {
 
   /* MD
   ### 🔧 Creating Basic Geometries
-  Now we'll create all the basic geometries that will be used to construct our building. These include materials, floor, columns, walls, windows, and more:
+  Now we'll create all the basic geometries that will be used to construct our building.
+  These include materials, floor, columns, walls, windows, and more:
 */
 
   // Materials
 
   const defaultMat = new THREE.MeshLambertMaterial({
-    color: "white",
+    color: "#696",
     side: THREE.DoubleSide,
   });
 
@@ -335,11 +336,11 @@ const init = async () => {
 
   /* MD
   ### 🏗️ Building Generation Logic
-  Now let's define the main function that will regenerate the building fragments based on our settings. This function will create all the building elements and position them correctly:
+  Now let's define the main function that will regenerate the building fragments based on our settings.
+  This function will create all the building elements and position them correctly:
 */
 
   let processing = false;
-
   // We'll use this for boolean operations
 
   // Corner cuts
@@ -1059,14 +1060,16 @@ const init = async () => {
 
   /* MD
     ### 🎯 Final Steps
-    Once all elements are created, we update the fragments model and clear any processing flags to prepare for the next regeneration cycle.
+    Once all elements are created, 
+    we update the fragments model and clear any processing flags to prepare for the next regeneration cycle.
   */
 
   await regenerateFragments();
 
   /* MD
   ### 🔄 Update Management
-  To ensure smooth performance, we'll implement a throttled update system that prevents excessive regeneration of the building when parameters change rapidly:
+  To ensure smooth performance, 
+  we'll implement a throttled update system that prevents excessive regeneration of the building when parameters change rapidly:
 */
 
   let lastUpdate: any = null;
@@ -1087,7 +1090,8 @@ const init = async () => {
 
   /* MD
   ### 🎯 View Mode Management
-  We'll implement different view modes to allow users to switch between 3D model view and floor plan view, enhancing the user experience:
+  We'll implement different view modes to allow users to switch between 3D model view and floor plan view,
+  enhancing the user experience:
 */
 
   enum ViewMode {
@@ -1133,7 +1137,8 @@ const init = async () => {
 
   /* MD
   ### 🧩 Adding User Interface
-  We will use the `@thatopen/ui` library to add some simple and cool UI elements to our app. First, we need to call the `init` method of the `BUI.Manager` class to initialize the library:
+  We will use the `@thatopen/ui` library to add some simple and cool UI elements to our app.
+  First, we need to call the `init` method of the `BUI.Manager` class to initialize the library:
 */
 
   BUI.Manager.init();
@@ -1207,9 +1212,10 @@ const init = async () => {
   mainContainer.append(panel);
 
   /* MD
-  ### 📱 Mobile-Friendly Menu
-  We will make some logic that adds a button to the screen when the user is visiting our app from their phone, allowing to show or hide the menu. Otherwise, the menu would make the app unusable.
-*/
+    ### 📱 Mobile-Friendly Menu
+    We will make some logic that adds a button to the screen when the user is visiting our app from their phone,
+    allowing to show or hide the menu. Otherwise, the menu would make the app unusable.
+  */
 
   const button = BUI.Component.create<BUI.PanelSection>(() => {
     const onClick = () => {
@@ -1229,9 +1235,11 @@ const init = async () => {
   //mainContainer.append(button);
 
   /* MD
-  ### ⏱️ Measuring the Performance (optional)
-  We'll use the [Stats.js](https://github.com/mrdoob/stats.js) to measure the performance of our app. We will add it to the top left corner of the viewport. This way, we'll make sure that the memory consumption and the FPS of our app are under control.
-*/
+    ### ⏱️ Measuring the Performance (optional)
+    We'll use the [Stats.js](https://github.com/mrdoob/stats.js) to measure the performance of our app.
+    We will add it to the top left corner of the viewport.
+    This way, we'll make sure that the memory consumption and the FPS of our app are under control.
+  */
 
   const stats = new Stats();
   stats.showPanel(2);
@@ -1242,10 +1250,11 @@ const init = async () => {
   world.renderer.onAfterUpdate.add(() => stats.end());
 
   /* MD
-  ### 🎉 Congratulations!
-  You've successfully built a building configurator using the Fragments API! 🚀
-  Now you can create parametric buildings with customizable dimensions, floors, and structural elements. Ready to explore more? Check out our other tutorials to unlock the full potential of Fragments! 💡
-*/
+    ### 🎉 Congratulations!
+    You've successfully built a building configurator using the Fragments API! 🚀
+    Now you can create parametric buildings with customizable dimensions, floors, and structural elements.
+    Ready to explore more? Check out our other tutorials to unlock the full potential of Fragments! 💡
+  */
 };
 </script>
 
