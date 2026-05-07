@@ -6,6 +6,7 @@ import Reluis from "./components/Reluis.vue";
 import SerpApi from "./components/SerpApi.vue";
 import Tri from "./components/Tri.vue";
 import ThatOpen from "./components/ThatOpen.vue";
+import Fragments from "./components/Fragments.vue";
 
 const routes: any[] = [
   { name: "home", path: "/", component: Home },
@@ -14,6 +15,7 @@ const routes: any[] = [
   { name: "serpapi", path: "/serpapi", component: SerpApi },
   { name: "tri", path: "/tri", component: Tri },
   { name: "that-open", path: "/that-open", component: ThatOpen },
+  { name: "fragments", path: "/fragments", component: Fragments },
 ];
 
 const router: any = createRouter({

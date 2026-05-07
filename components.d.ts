@@ -28,6 +28,7 @@ declare module 'vue' {
     Fiber: typeof import('./src/components/SectionEditor/Fiber.vue')['default']
     FibersCirc: typeof import('./src/components/SectionEditor/FibersCirc.vue')['default']
     FibersLine: typeof import('./src/components/SectionEditor/FibersLine.vue')['default']
+    Fragments: typeof import('./src/components/Fragments.vue')['default']
     Gantt: typeof import('./src/components/Gantt.vue')['default']
     Handle: typeof import('./src/components/SectionEditor/Handle.vue')['default']
     Home: typeof import('./src/components/Home.vue')['default']
