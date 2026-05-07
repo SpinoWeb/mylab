@@ -364,17 +364,17 @@ const init = async () => {
 
     // prettier-ignore
     geometryEngine.getExtrusion(ground.geometry, {
-  profilePoints: [
-    0, 0, 0,
-    0, 0, fl,
-    fw, 0, fl,
-    fw, 0, 0,
-    0, 0, 0,
-  ],
-  direction: [0, 1, 0],
-  cap: true,
-  length: settings.floorThickness,
-});
+      profilePoints: [
+        0, 0, 0,
+        0, 0, fl,
+        fw, 0, fl,
+        fw, 0, 0,
+        0, 0, 0,
+      ],
+      direction: [0, 1, 0],
+      cap: true,
+      length: settings.floorThickness,
+    });
 
     ground.position.y = -settings.floorThickness;
     ground.position.x = -floorPadding;
