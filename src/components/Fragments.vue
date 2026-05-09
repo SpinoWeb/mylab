@@ -52,17 +52,54 @@ import * as WEBIFC from "web-ifc";
 import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
 
+//
+/* MD
+    We will also define some settings that will be used to create the building.
+  */
+
+const settings = {
+  width: 25,
+  length: 35,
+  columnLengthDistance: 2.5,
+  columnWidthDistance: 2.5,
+  floorHeight: 3,
+  exteriorColumnWidth: 0.5,
+  exteriorColumnLength: 0.5,
+  interiorColumnWidth: 0.25,
+  interiorColumnLength: 0.25,
+  floorThickness: 0.3,
+  numberOfFloors: 10,
+  clipPlaneHeight: 13.5,
+  windowHeight: 2,
+  windowWidth: 1,
+  roofHeight: 2,
+};
+
+//
+let mainContainer: any,
+  container,
+  components,
+  worlds,
+  world: any,
+  prevBackground: any,
+  fragments: any,
+  model: any;
+
 onMounted(async () => {
-  setTimeout(() => building_configurator(), 200);
+  await init();
+
+  //console.log("model", model);
+
+  await test();
 });
 
 // -------------
-// building_configurator
+// init
 // -------------
-const building_configurator = async () => {
-  console.log("building_configurator");
+const init = async () => {
+  console.log("init");
 
-  const mainContainer = document.getElementById("mainContainer")!;
+  mainContainer = document.getElementById("mainContainer")!;
 
   /* MD
   ### 🌎 Setting up a Simple Scene
@@ -70,13 +107,13 @@ const building_configurator = async () => {
   This will serve as the foundation for our application and allow us to visualize the 3D models effectively:
 */
 
-  const container = document.getElementById("container")!;
+  container = document.getElementById("container")!;
 
-  const components = new OBC.Components();
+  components = new OBC.Components();
 
-  const worlds = components.get(OBC.Worlds);
+  worlds = components.get(OBC.Worlds);
 
-  const world = worlds.create<
+  world = worlds.create<
     OBC.ShadowedScene,
     OBC.OrthoPerspectiveCamera,
     OBF.PostproductionRenderer
@@ -100,7 +137,7 @@ const building_configurator = async () => {
     },
   });
 
-  const prevBackground = world.scene.three.background;
+  prevBackground = world.scene.three.background;
 
   await world.scene.updateShadows();
 
@@ -110,28 +147,6 @@ const building_configurator = async () => {
 
   const axes = new THREE.AxesHelper(1);
   world.scene.three.add(axes);
-
-  /* MD
-    We will also define some settings that will be used to create the building.
-  */
-
-  const settings = {
-    width: 25,
-    length: 35,
-    columnLengthDistance: 2.5,
-    columnWidthDistance: 2.5,
-    floorHeight: 3,
-    exteriorColumnWidth: 0.5,
-    exteriorColumnLength: 0.5,
-    interiorColumnWidth: 0.25,
-    interiorColumnLength: 0.25,
-    floorThickness: 0.3,
-    numberOfFloors: 10,
-    clipPlaneHeight: 13.5,
-    windowHeight: 2,
-    windowWidth: 1,
-    roofHeight: 2,
-  };
 
   /* MD
     :::
@@ -146,10 +161,11 @@ const building_configurator = async () => {
     This will allow us to load models effortlessly and start manipulating them with ease:
   */
 
-  // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg and returns a blob URL.
+  // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg
+  // and returns a blob URL.
   // You can also pass your own URL to `fragments.init(...)` if you'd rather host the worker yourself.
   const workerUrl = await FRAGS.FragmentsModels.getWorker();
-  const fragments = components.get(OBC.FragmentsManager);
+  fragments = components.get(OBC.FragmentsManager);
   fragments.init(workerUrl);
 
   // Remove z fighting
@@ -166,9 +182,9 @@ const building_configurator = async () => {
 
   fragments.core.settings.graphicsQuality = 1;
 
-  world.camera.controls.addEventListener("control", () => {
-    fragments.core.update();
-  });
+  world.camera.controls.addEventListener("control", () =>
+    fragments.core.update(),
+  );
 
   // Once a model is available in the list, we can tell it
   // to use shadows and to use the clipping planes we are using
@@ -271,7 +287,7 @@ const building_configurator = async () => {
   */
 
   const bytes = FRAGS.EditUtils.newModel({ raw: true });
-  const model = await fragments.core.load(bytes, {
+  model = await fragments.core.load(bytes, {
     modelId: "example",
     camera: world.camera.three,
     raw: true,
@@ -279,16 +295,23 @@ const building_configurator = async () => {
 
   world.scene.three.add(model.object);
   await fragments.core.update(true);
+};
+
+// -------------
+// building_configurator
+// -------------
+const building_configurator = async () => {
+  console.log("building_configurator");
 
   /* MD
-  ### 🧊 Setting up the Geometry Engine  
-  Now, let's set up the Geometry Engine. We'll use it to generate the building geometry.
+    ### 🧊 Setting up the Geometry Engine  
+    Now, let's set up the Geometry Engine. We'll use it to generate the building geometry.
 
-  :::
-    warning Geometry Engine?
-    The Geometry Engine is a library that allows us to easily generate geometry parametrically using the Fragments API.
-  :::
-*/
+    :::
+      warning Geometry Engine?
+      The Geometry Engine is a library that allows us to easily generate geometry parametrically using the Fragments API.
+    :::
+  */
 
   const api = new WEBIFC.IfcAPI();
   api.SetWasmPath("https://unpkg.com/web-ifc@0.0.77/", true);
@@ -296,10 +319,10 @@ const building_configurator = async () => {
   const geometryEngine = new FRAGS.GeometryEngine(api);
 
   /* MD
-  ### 🔧 Creating Basic Geometries
-  Now we'll create all the basic geometries that will be used to construct our building.
-  These include materials, floor, columns, walls, windows, and more:
-*/
+    ### 🔧 Creating Basic Geometries
+    Now we'll create all the basic geometries that will be used to construct our building.
+    These include materials, floor, columns, walls, windows, and more:
+  */
 
   // Materials
 
@@ -352,9 +375,11 @@ const building_configurator = async () => {
 
   const staircaseHoleMesh = new THREE.Mesh(staircaseHoleGeometry);
 
+  //
   const regenerateFragments = async () => {
     const elementsData: FRAGS.NewElementData[] = [];
 
+    //console.log("regenerateFragments > model", model);
     await fragments.core.editor.reset(model.modelId);
 
     // Create floor
@@ -1051,7 +1076,7 @@ const building_configurator = async () => {
 
     await fragments.core.editor.createElements(model.modelId, elementsData);
 
-    clearEdges();
+    //clearEdges();
 
     await fragments.core.update(true);
 
@@ -1141,8 +1166,9 @@ const building_configurator = async () => {
   First, we need to call the `init` method of the `BUI.Manager` class to initialize the library:
 */
 
-  BUI.Manager.init();
+  //BUI.Manager.init();
 
+  /*
   const [panel] = BUI.Component.create<BUI.PanelSection, any>((_) => {
     return BUI.html`
     <bim-panel style="min-width: 20rem; position: absolute; top: 0; left: 0; z-index: 9" id="controls-panel" active label="Element Editor" class="options-menu">
@@ -1209,7 +1235,8 @@ const building_configurator = async () => {
     </bim-panel>
   `;
   }, {});
-  mainContainer.append(panel);
+  */
+  //mainContainer.append(panel);
 
   /* MD
     ### 📱 Mobile-Friendly Menu
@@ -1217,6 +1244,7 @@ const building_configurator = async () => {
     allowing to show or hide the menu. Otherwise, the menu would make the app unusable.
   */
 
+  /*
   const button = BUI.Component.create<BUI.PanelSection>(() => {
     const onClick = () => {
       if (panel.classList.contains("options-menu-visible")) {
@@ -1232,6 +1260,7 @@ const building_configurator = async () => {
     </bim-button>
   `;
   });
+  */
   //mainContainer.append(button);
 
   /* MD
@@ -1255,6 +1284,802 @@ const building_configurator = async () => {
     Now you can create parametric buildings with customizable dimensions, floors, and structural elements.
     Ready to explore more? Check out our other tutorials to unlock the full potential of Fragments! 💡
   */
+};
+
+// -------------
+// test
+// -------------
+const test = async () => {
+  console.log("test");
+
+  /* MD
+    ### 🧊 Setting up the Geometry Engine  
+    Now, let's set up the Geometry Engine. We'll use it to generate the building geometry.
+
+    :::
+      warning Geometry Engine?
+      The Geometry Engine is a library that allows us to easily generate geometry parametrically using
+      the Fragments API.
+    :::
+  */
+
+  const api = new WEBIFC.IfcAPI();
+  api.SetWasmPath("https://unpkg.com/web-ifc@0.0.77/", true);
+  await api.Init();
+  const geometryEngine = new FRAGS.GeometryEngine(api);
+
+  /* MD
+    ### 🔧 Creating Basic Geometries
+    Now we'll create all the basic geometries that will be used to construct our building.
+    These include materials, floor, columns, walls, windows, and more:
+  */
+
+  // Materials
+
+  const defaultMat = new THREE.MeshLambertMaterial({
+    color: "#696",
+    side: THREE.DoubleSide,
+  });
+
+  // Floor
+
+  const ground = new THREE.Mesh<
+    THREE.BufferGeometry,
+    THREE.MeshLambertMaterial | THREE.MeshBasicMaterial
+  >(new THREE.BufferGeometry(), defaultMat);
+
+  world.scene.three.add(ground);
+
+  // Grid
+
+  // Column
+
+  const exteriorColumnGeometry = new THREE.BufferGeometry();
+  const interiorColumnGeometry = new THREE.BufferGeometry();
+  const cornerWallGeometry = new THREE.BufferGeometry();
+  const windowFrameGeometry = new THREE.BufferGeometry();
+  const windowTopGeometry = new THREE.BufferGeometry();
+  const roofTopGeometry = new THREE.BufferGeometry();
+  const floorGeometry = new THREE.BufferGeometry();
+  const cutFloorGeometry = new THREE.BufferGeometry();
+  const staircaseHoleGeometry = new THREE.BufferGeometry();
+
+  const staircaseWallGeometry1 = new THREE.BufferGeometry();
+  const staircaseWallGeometry2 = new THREE.BufferGeometry();
+
+  /* MD
+  ### 🏗️ Building Generation Logic
+  Now let's define the main function that will regenerate the building fragments based on our settings.
+  This function will create all the building elements and position them correctly:
+*/
+
+  let processing: boolean = false;
+  // We'll use this for boolean operations
+
+  // Corner cuts
+  const fullFloorMesh = new THREE.Mesh(floorGeometry);
+  const corner1Mesh = new THREE.Mesh(exteriorColumnGeometry);
+  const corner2Mesh = new THREE.Mesh(exteriorColumnGeometry);
+  const corner3Mesh = new THREE.Mesh(exteriorColumnGeometry);
+  const corner4Mesh = new THREE.Mesh(exteriorColumnGeometry);
+
+  const staircaseHoleMesh = new THREE.Mesh(staircaseHoleGeometry);
+
+  //
+  const regenerateFragments = async () => {
+    const elementsData: FRAGS.NewElementData[] = [];
+
+    //console.log("regenerateFragments > model", model);
+    await fragments.core.editor.reset(model.modelId);
+
+    // Create floor
+
+    const floorPadding = 10;
+    const fw = settings.width + floorPadding * 2;
+    const fl = settings.length + floorPadding * 2;
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(ground.geometry, {
+      profilePoints: [
+        0, 0, 0,
+        0, 0, fl,
+        fw, 0, fl,
+        fw, 0, 0,
+        0, 0, 0,
+      ],
+      direction: [0, 1, 0],
+      cap: true,
+      length: settings.floorThickness,
+    });
+
+    ground.position.y = -settings.floorThickness;
+    ground.position.x = -floorPadding;
+    ground.position.z = -floorPadding;
+    ground.geometry.computeBoundingBox();
+
+    // Create base items
+
+    const matId = fragments.core.editor.createMaterial(
+      model.modelId,
+      new THREE.MeshLambertMaterial({
+        color: new THREE.Color(1, 1, 1),
+        side: THREE.DoubleSide,
+      }),
+    );
+
+    const ltId = fragments.core.editor.createLocalTransform(
+      model.modelId,
+      new THREE.Matrix4().identity(),
+    );
+
+    // CREATE GEOMETRIES
+
+    /* MD
+    ### 📐 Geometry Creation Process
+    Now we'll create all the individual geometries that make up our building. This includes exterior columns, interior columns, walls, windows, floors, and more. Each geometry is carefully calculated based on our building parameters:
+  */
+
+    const w = settings.width;
+    const l = settings.length;
+
+    const corners = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(settings.width, 0, 0),
+      new THREE.Vector3(settings.width, 0, settings.length),
+      new THREE.Vector3(0, 0, settings.length),
+      new THREE.Vector3(0, 0, 0), // Repeating this make facade iteration easier
+    ];
+
+    const extColumnX = settings.width - settings.exteriorColumnWidth;
+    const extColumnZ = settings.length - settings.exteriorColumnLength;
+
+    const exteriorColumnPositions: THREE.Vector3[] = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(extColumnX, 0, 0),
+      new THREE.Vector3(extColumnX, 0, extColumnZ),
+      new THREE.Vector3(0, 0, extColumnZ),
+    ];
+
+    // Exterior column
+
+    const ecl = settings.exteriorColumnLength;
+    const ecw = settings.exteriorColumnWidth;
+    // prettier-ignore
+    geometryEngine.getExtrusion(exteriorColumnGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      0, 0, ecl,
+      ecw, 0, ecl,
+      ecw, 0, 0,
+    ],
+    direction: [0, 1, 0],
+    cap: true,
+    length: settings.floorHeight,
+  });
+
+    const extColumnGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      exteriorColumnGeometry,
+    );
+
+    // Corner wall
+
+    // Windows are 1 m wide, so we need this to solve the corners
+
+    const cwLength = settings.exteriorColumnLength * 2;
+    const cwWidth = 1 - ecw;
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(cornerWallGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      0, 0, cwLength,
+      cwWidth, 0, cwLength,
+      cwWidth, 0, 0,
+      0, 0, 0,
+    ],
+    direction: [0, 1, 0],
+    length: settings.floorHeight,
+  });
+
+    const cornerWallGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      cornerWallGeometry,
+    );
+
+    // Interior column
+
+    const icProfilePoints = geometryEngine.getProfilePoints({
+      type: FRAGS.ProfileType.H,
+      width: settings.interiorColumnWidth,
+      depth: settings.interiorColumnLength,
+      thickness: 0.03,
+      flangeThickness: 0.02,
+    });
+
+    const icProfilePointsHorizontal = geometryEngine.transformPoints(
+      icProfilePoints,
+      new THREE.Matrix4().makeRotationX(Math.PI / 2),
+    );
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(interiorColumnGeometry, {
+    profilePoints: icProfilePointsHorizontal,
+    direction: [0, 1, 0],
+    length: settings.floorHeight - settings.floorThickness,
+  });
+
+    const intColumnGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      interiorColumnGeometry,
+    );
+
+    // Staircase hole
+
+    const stairCaseWidth = 3;
+    const stairCaseLength = 5;
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(staircaseHoleGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      0, 0, stairCaseLength,
+      stairCaseWidth, 0, stairCaseLength,
+      stairCaseWidth, 0, 0,
+    ],
+    direction: [0, 1, 0],
+    length: 1,
+  });
+
+    staircaseHoleMesh.position.set(0, -0.5, 0);
+
+    // Staircase walls
+
+    const wallThickness = 0.2;
+
+    // prettier-ignore
+    geometryEngine.getWall(staircaseWallGeometry1, {
+    start: [stairCaseWidth, 0, settings.windowWidth],
+    end: [stairCaseWidth, settings.floorHeight - settings.floorThickness, stairCaseLength + wallThickness / 2],
+    direction: [0, 1, 0],
+    elevation: 0,
+    offset: 0,
+    thickness: wallThickness,
+    cuttingPlaneNormal: [0, 0, 0],
+    cuttingPlanePosition: [0, 0, 0],
+    height: settings.floorHeight - settings.floorThickness,
+  });
+
+    const staircaseWall1GeoId = fragments.core.editor.createShell(
+      model.modelId,
+      staircaseWallGeometry1,
+    );
+
+    // prettier-ignore
+    geometryEngine.getWall(staircaseWallGeometry2, {
+    start: [0, 0, stairCaseLength],
+    end: [stairCaseWidth - wallThickness / 2, 0, stairCaseLength],
+    direction: [0, 1, 0],
+    elevation: 0,
+    offset: 0,
+    thickness: wallThickness,
+    cuttingPlaneNormal: [0, 0, 0],
+    cuttingPlanePosition: [0, 0, 0],
+    height: settings.floorHeight - settings.floorThickness,
+  });
+
+    const staircaseWall2GeoId = fragments.core.editor.createShell(
+      model.modelId,
+      staircaseWallGeometry2,
+    );
+
+    // Floor
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(floorGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      0, 0, l,
+      w, 0, l,
+      w, 0, 0,
+    ],
+    direction: [0, 1, 0],
+    cap: true,
+    length: settings.floorThickness,
+  });
+
+    // Subtract floor corners with columns using booleans
+
+    corner1Mesh.position.copy(exteriorColumnPositions[0]);
+    corner2Mesh.position.copy(exteriorColumnPositions[1]);
+    corner3Mesh.position.copy(exteriorColumnPositions[2]);
+    corner4Mesh.position.copy(exteriorColumnPositions[3]);
+    fullFloorMesh.updateMatrixWorld(true);
+    corner1Mesh.updateMatrixWorld(true);
+    corner2Mesh.updateMatrixWorld(true);
+    corner3Mesh.updateMatrixWorld(true);
+    corner4Mesh.updateMatrixWorld(true);
+    staircaseHoleMesh.updateMatrixWorld(true);
+    geometryEngine.getBooleanOperation(cutFloorGeometry, {
+      target: fullFloorMesh,
+      operands: [
+        corner1Mesh,
+        corner2Mesh,
+        corner3Mesh,
+        corner4Mesh,
+        staircaseHoleMesh,
+      ],
+      type: "DIFFERENCE",
+    });
+
+    const tempMesh6 = new THREE.Mesh(cutFloorGeometry, defaultMat);
+    world.scene.three.add(tempMesh6);
+    tempMesh6.position.y += 10;
+
+    const floorGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      cutFloorGeometry,
+    );
+
+    // Window frame
+
+    // prettier-ignore
+    geometryEngine.getSweep(windowFrameGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      0.1, 0, 0,
+      0.1, 0.1, 0,
+      0, 0.1, 0,
+      0, 0, 0,
+    ],
+    curvePoints: [
+      0, 0, 0,
+      0, settings.windowHeight, 0,
+      settings.windowWidth, settings.windowHeight, 0,
+      settings.windowWidth, 0, 0,
+      0, 0, 0,
+    ],
+  });
+
+    const windowFrameGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      windowFrameGeometry,
+    );
+
+    // Window top
+
+    const wtHeight = settings.floorHeight - settings.windowHeight;
+
+    // prettier-ignore
+    geometryEngine.getExtrusion(windowTopGeometry, {
+      profilePoints: [
+        0, 0, 0,
+        0, wtHeight, 0,
+        settings.windowWidth, wtHeight, 0,
+        settings.windowWidth, 0, 0,
+      ],
+      direction: [0, 0, 1],
+      cap: true,
+      length: settings.floorThickness,
+    });
+
+    const windowTopGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      windowTopGeometry,
+    );
+
+    // Roof top
+
+    const roofTopThickness = 0.15;
+    const roofTopWidth = 0.2;
+
+    // prettier-ignore
+    geometryEngine.getSweep(roofTopGeometry, {
+    profilePoints: [
+      0, 0, 0,
+      1, 0, 0,
+      1, roofTopThickness, 0,
+      0, roofTopThickness, 0,
+      0, 0, 0,
+    ],
+    curvePoints: [
+      0, 0, 0,
+      0, 0, roofTopWidth,
+      0, settings.windowHeight, roofTopWidth,
+      0, settings.windowHeight, 0,
+    ],
+  });
+
+    const roofTopGeoId = fragments.core.editor.createShell(
+      model.modelId,
+      roofTopGeometry,
+    );
+
+    // CREATE ELEMENTS
+
+    /* MD
+    ### 🏢 Element Assembly
+    Now we'll create all the building elements by positioning our geometries throughout the building. This includes placing columns, floors, walls, windows, and other structural elements at the correct locations:
+  */
+
+    const tempObject = new THREE.Object3D();
+
+    // Exterior columns
+
+    for (const position of exteriorColumnPositions) {
+      for (let i = 0; i < settings.numberOfFloors; i++) {
+        tempObject.position.copy(position);
+        tempObject.position.y = i * settings.floorHeight;
+        tempObject.updateMatrix();
+
+        elementsData.push({
+          attributes: {
+            _category: {
+              value: "test",
+            },
+          },
+          globalTransform: tempObject.matrix.clone(),
+          samples: [
+            {
+              localTransform: ltId,
+              representation: extColumnGeoId,
+              material: matId,
+            },
+          ],
+        });
+      }
+    }
+
+    // Interior columns
+
+    const interiorColumnPositions: THREE.Vector3[] = [];
+
+    const icLenthCount = Math.floor(
+      settings.length / settings.columnLengthDistance,
+    );
+
+    const icWidthCount = Math.floor(
+      settings.width / settings.columnWidthDistance,
+    );
+
+    for (let i = 0; i <= icLenthCount; i++) {
+      const z = i * settings.columnLengthDistance;
+      for (let j = 0; j <= icWidthCount; j++) {
+        const isCorner1 = i === 0 && j === 0;
+        const isCorner2 = i === 0 && j === icWidthCount;
+        const isCorner3 = i === icLenthCount && j === 0;
+        const isCorner4 = i === icLenthCount && j === icWidthCount;
+
+        if (isCorner1 || isCorner2 || isCorner3 || isCorner4) {
+          continue;
+        }
+
+        const x = j * settings.columnWidthDistance;
+        interiorColumnPositions.push(new THREE.Vector3(x, 0, z));
+      }
+    }
+
+    for (const position of interiorColumnPositions) {
+      for (let i = 0; i < settings.numberOfFloors; i++) {
+        tempObject.position.copy(position);
+        tempObject.position.y = i * settings.floorHeight;
+        tempObject.updateMatrix();
+
+        elementsData.push({
+          attributes: {
+            _category: {
+              value: "test",
+            },
+          },
+          globalTransform: tempObject.matrix.clone(),
+          samples: [
+            {
+              localTransform: ltId,
+              representation: intColumnGeoId,
+              material: matId,
+            },
+          ],
+        });
+      }
+    }
+
+    // Floors
+
+    for (let i = 0; i < settings.numberOfFloors; i++) {
+      const fh = (i + 1) * settings.floorHeight - settings.floorThickness;
+      tempObject.position.set(0, fh, 0);
+      tempObject.updateMatrix();
+
+      elementsData.push({
+        attributes: {
+          _category: {
+            value: "test",
+          },
+        },
+        globalTransform: tempObject.matrix.clone(),
+        samples: [
+          {
+            localTransform: ltId,
+            representation: floorGeoId,
+            material: matId,
+          },
+        ],
+      });
+    }
+
+    // Staircase walls
+
+    for (let i = 0; i < settings.numberOfFloors; i++) {
+      tempObject.position.set(0, i * settings.floorHeight, 0);
+      tempObject.rotation.set(0, 0, 0);
+      tempObject.updateMatrix();
+
+      elementsData.push({
+        attributes: {
+          _category: {
+            value: "test",
+          },
+        },
+        globalTransform: tempObject.matrix.clone(),
+        samples: [
+          {
+            localTransform: ltId,
+            representation: staircaseWall1GeoId,
+            material: matId,
+          },
+        ],
+      });
+
+      elementsData.push({
+        attributes: {
+          _category: {
+            value: "test",
+          },
+        },
+        globalTransform: tempObject.matrix.clone(),
+        samples: [
+          {
+            localTransform: ltId,
+            representation: staircaseWall2GeoId,
+            material: matId,
+          },
+        ],
+      });
+
+      // We'll reuse the window frame for the door
+
+      tempObject.position.set(
+        stairCaseWidth,
+        i * settings.floorHeight,
+        settings.windowWidth,
+      );
+
+      tempObject.rotation.y = Math.PI / 2;
+      tempObject.updateMatrix();
+
+      elementsData.push({
+        attributes: {
+          _category: {
+            value: "test",
+          },
+        },
+        globalTransform: tempObject.matrix.clone(),
+        samples: [
+          {
+            localTransform: ltId,
+            representation: windowFrameGeoId,
+            material: matId,
+          },
+        ],
+      });
+
+      tempObject.position.y += settings.windowHeight;
+      tempObject.position.x -= 0.1;
+      tempObject.updateMatrix();
+
+      elementsData.push({
+        attributes: {
+          _category: {
+            value: "test",
+          },
+        },
+        globalTransform: tempObject.matrix.clone(),
+        samples: [
+          {
+            localTransform: ltId,
+            representation: windowTopGeoId,
+            material: matId,
+          },
+        ],
+      });
+    }
+
+    // Corner walls
+
+    for (let j = 0; j < settings.numberOfFloors; j++) {
+      for (let i = 0; i < corners.length - 1; i++) {
+        const corner = corners[i];
+        const nextCorner = corners[i + 1];
+        const direction = nextCorner.clone().sub(corner).normalize();
+        const distance = corner.distanceTo(nextCorner);
+
+        const dirNormal = new THREE.Vector3();
+        dirNormal.crossVectors(direction, new THREE.Vector3(0, 1, 0));
+
+        tempObject.position.copy(corner);
+        tempObject.lookAt(nextCorner);
+        tempObject.rotateY(-Math.PI / 2);
+        tempObject.position.add(
+          direction.clone().multiplyScalar(settings.exteriorColumnLength),
+        );
+        tempObject.position.add(
+          dirNormal.clone().multiplyScalar(-settings.exteriorColumnWidth / 2),
+        );
+        tempObject.position.y = j * settings.floorHeight;
+        tempObject.updateMatrix();
+
+        // First wall
+
+        elementsData.push({
+          attributes: {
+            _category: {
+              value: "test",
+            },
+          },
+          globalTransform: tempObject.matrix.clone(),
+          samples: [
+            {
+              localTransform: ltId,
+              representation: cornerWallGeoId,
+              material: matId,
+            },
+          ],
+        });
+
+        // Second wall
+
+        // We subtract 2 because the first and last windows that are missing
+        const offsetToNextCornerWall = distance - 2 + cwWidth;
+
+        tempObject.position.add(
+          direction.clone().multiplyScalar(offsetToNextCornerWall),
+        );
+
+        tempObject.updateMatrix();
+
+        elementsData.push({
+          attributes: {
+            _category: {
+              value: "test",
+            },
+          },
+          globalTransform: tempObject.matrix.clone(),
+          samples: [
+            {
+              localTransform: ltId,
+              representation: cornerWallGeoId,
+              material: matId,
+            },
+          ],
+        });
+      }
+    }
+
+    // Window frames and tops
+
+    // Windows are 1m wide, so each meter has one window
+
+    for (let k = 0; k < settings.numberOfFloors; k++) {
+      for (let i = 0; i < corners.length - 1; i++) {
+        const corner = corners[i];
+        const nextCorner = corners[i + 1];
+        const distance = corner.distanceTo(nextCorner);
+        const direction = nextCorner.clone().sub(corner).normalize();
+
+        for (let j = 1; j < distance - 1; j++) {
+          tempObject.position.copy(corner);
+          tempObject.lookAt(nextCorner);
+          tempObject.rotateY(-Math.PI / 2);
+          tempObject.position.add(direction.clone().multiplyScalar(j));
+          tempObject.position.y = k * settings.floorHeight;
+          tempObject.updateMatrix();
+
+          const norDir = new THREE.Vector3();
+          norDir.crossVectors(direction, new THREE.Vector3(0, 1, 0));
+
+          // Window frame
+
+          elementsData.push({
+            attributes: {
+              _category: {
+                value: "test",
+              },
+            },
+            globalTransform: tempObject.matrix.clone(),
+            samples: [
+              {
+                localTransform: ltId,
+                representation: windowFrameGeoId,
+                material: matId,
+              },
+            ],
+          });
+
+          // Window top
+
+          tempObject.position.y += settings.windowHeight;
+          tempObject.position.add(norDir.clone().multiplyScalar(-0.3));
+          tempObject.updateMatrix();
+
+          elementsData.push({
+            attributes: {
+              _category: {
+                value: "test",
+              },
+            },
+            globalTransform: tempObject.matrix.clone(),
+            samples: [
+              {
+                localTransform: ltId,
+                representation: windowTopGeoId,
+                material: matId,
+              },
+            ],
+          });
+        }
+      }
+    }
+
+    // Roof
+
+    for (let i = 0; i < corners.length - 1; i++) {
+      const corner = corners[i];
+      const nextCorner = corners[i + 1];
+      const distance = corner.distanceTo(nextCorner);
+      const direction = nextCorner.clone().sub(corner).normalize();
+
+      for (let j = 0; j < distance; j++) {
+        tempObject.position.copy(corner);
+        tempObject.lookAt(nextCorner);
+        tempObject.rotateY(Math.PI / 2);
+        tempObject.position.add(direction.clone().multiplyScalar(j));
+        tempObject.position.y = settings.floorHeight * settings.numberOfFloors;
+        tempObject.updateMatrix();
+
+        elementsData.push({
+          attributes: {
+            _category: {
+              value: "test",
+            },
+          },
+          globalTransform: tempObject.matrix.clone(),
+          samples: [
+            {
+              localTransform: ltId,
+              representation: roofTopGeoId,
+              material: matId,
+            },
+          ],
+        });
+      }
+    }
+
+    await fragments.core.editor.createElements(model.modelId, elementsData);
+
+    //clearEdges();
+
+    await fragments.core.update(true);
+
+    processing = false;
+  };
+
+  /* MD
+    ### 🎯 Final Steps
+    Once all elements are created, 
+    we update the fragments model and clear any processing flags to prepare for the next regeneration cycle.
+  */
+
+  await regenerateFragments();
 };
 </script>
 
