@@ -51,6 +51,7 @@ import * as BUI from "@thatopen/ui";
 import * as WEBIFC from "web-ifc";
 import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
+import { mdiAlphaACircle } from "@mdi/js";
 
 //
 /* MD
@@ -402,10 +403,34 @@ const test = async () => {
   // rettangolo 2D
   const shape = new THREE.Shape();
 
-  shape.moveTo(-0.15, -0.3);
-  shape.lineTo(0.15, -0.3);
-  shape.lineTo(0.15, 0.3);
-  shape.lineTo(-0.15, 0.3);
+  /*
+  const t3: number = 0.5,
+    t2: number = 0.5,
+    tw: number = 0.1,
+    tf: number = 0.1;
+
+  shape.moveTo(-t2 / 2, t3); // A
+  shape.lineTo(-t2 / 2, t3 - tf); // B
+  shape.lineTo(-tw / 2, t3 - tf); // C
+  shape.lineTo(-tw / 2, 0); // D
+  shape.lineTo(tw / 2, 0); // E
+  shape.lineTo(tw / 2, t3 - tf); // F
+  shape.lineTo(t2 / 2, t3 - tf); // G
+  shape.moveTo(t2 / 2, t3); // H
+  shape.closePath();
+  */
+
+  const radius: number = 0.25,
+    slices: number = 18;
+  for (let i = 0; i < slices; i++) {
+    const alpha: number = (i * 2 * Math.PI) / slices,
+      ca: number = Math.cos(alpha),
+      sa: number = Math.sin(alpha);
+    //console.log(i, alpha, ca, sa);
+    i < 1
+      ? shape.moveTo(radius * ca, radius * sa)
+      : shape.lineTo(radius * ca, radius * sa); // P
+  }
   shape.closePath();
 
   for (let i = 0; i < 15; i++) {
@@ -447,6 +472,7 @@ const test = async () => {
       const material: THREE.MeshStandardMaterial =
         new THREE.MeshStandardMaterial({
           color: "#2196F3",
+          //color: new THREE.Color(i, j, i + j),
         });
 
       // mesh
