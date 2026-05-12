@@ -155,6 +155,7 @@ import "vue-json-pretty/lib/styles.css";
 import ExcelJS from "exceljs";
 
 import TriViewer from "./TriViewer.vue";
+import TriFragments from "./TriFragments.vue";
 import SectionEditor from "./SectionEditor.vue";
 
 import { inject } from "vue";
@@ -190,6 +191,7 @@ const jobs: string[] = [
   "zappulla02",
   "zappulla",
 ];
+// ref
 const job = ref<string | undefined>();
 const data = ref<DataTri>({});
 const dataTri = ref<DataTri>({});

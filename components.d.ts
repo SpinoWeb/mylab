@@ -21,6 +21,7 @@ declare module 'vue' {
     Column: typeof import('primevue/column')['default']
     ConsoleLog: typeof import('./src/components/ConsoleLog.vue')['default']
     Copia: typeof import('./src/components/Gantt - Copia.vue')['default']
+    copy: typeof import('./src/components/TriViewer copy.vue')['default']
     DataTable: typeof import('primevue/datatable')['default']
     Dialog: typeof import('primevue/dialog')['default']
     Divider: typeof import('primevue/divider')['default']
@@ -60,6 +61,7 @@ declare module 'vue' {
     ThatOpen: typeof import('./src/components/ThatOpen.vue')['default']
     ToggleSwitch: typeof import('primevue/toggleswitch')['default']
     Tri: typeof import('./src/components/Tri.vue')['default']
+    TriFragments: typeof import('./src/components/TriFragments.vue')['default']
     TriViewer: typeof import('./src/components/TriViewer.vue')['default']
   }
   export interface GlobalDirectives {

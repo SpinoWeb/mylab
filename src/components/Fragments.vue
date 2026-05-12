@@ -49,9 +49,8 @@ import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
 import * as BUI from "@thatopen/ui";
 import * as WEBIFC from "web-ifc";
-import Stats from "stats.js";
+//import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
-import { mdiAlphaACircle } from "@mdi/js";
 
 //
 /* MD
@@ -399,28 +398,14 @@ const building = async () => {
   await regenerateFragments();
 };
 
+// -------------
+// test
+// -------------
 const test = async () => {
-  // rettangolo 2D
+  // cerchio 2D
   const shape = new THREE.Shape();
 
-  /*
-  const t3: number = 0.5,
-    t2: number = 0.5,
-    tw: number = 0.1,
-    tf: number = 0.1;
-
-  shape.moveTo(-t2 / 2, t3); // A
-  shape.lineTo(-t2 / 2, t3 - tf); // B
-  shape.lineTo(-tw / 2, t3 - tf); // C
-  shape.lineTo(-tw / 2, 0); // D
-  shape.lineTo(tw / 2, 0); // E
-  shape.lineTo(tw / 2, t3 - tf); // F
-  shape.lineTo(t2 / 2, t3 - tf); // G
-  shape.moveTo(t2 / 2, t3); // H
-  shape.closePath();
-  */
-
-  const radius: number = 0.25,
+  const radius: number = 0.15,
     slices: number = 18;
   for (let i = 0; i < slices; i++) {
     const alpha: number = (i * 2 * Math.PI) / slices,
@@ -433,22 +418,22 @@ const test = async () => {
   }
   shape.closePath();
 
-  for (let i = 0; i < 15; i++) {
-    for (let j = 0; j < 25; j++) {
+  for (let i = 0; i < 5; i++) {
+    for (let j = 0; j < 5; j++) {
       //for (let k = 0; k < 5; k++) {
       // joints
       const start = new THREE.Vector3(i, 0, j);
-      const end = new THREE.Vector3(i, 1 + i / 10 + j / 10, j);
+      const end = new THREE.Vector3(i + j / 5, 3, j);
 
       // vettore direzione
       const direction = new THREE.Vector3().subVectors(end, start);
       const length = direction.length();
-      const normalizedDirection = direction.clone().normalize();
+      const normalized = direction.clone().normalize();
 
       // estrusione
       const extrudeSettings = {
         depth: length,
-        steps: 1,
+        //steps: 1,
         bevelEnabled: false,
       };
 
@@ -457,11 +442,14 @@ const test = async () => {
         extrudeSettings,
       );
 
-      // orientamento asse Z -> direzione
-      const zAxis: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+      // asse Z locale
+      const zAxis = new THREE.Vector3(0, 0, 1);
 
-      const quaternion: THREE.Quaternion =
-        new THREE.Quaternion().setFromUnitVectors(zAxis, normalizedDirection);
+      // rotazione verso il target
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(
+        zAxis,
+        normalized,
+      );
 
       geometry.applyQuaternion(quaternion);
 
