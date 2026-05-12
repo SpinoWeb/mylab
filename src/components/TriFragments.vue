@@ -1,8 +1,8 @@
 <template>
-  <div ref="frag-container" id="frag-container" class="frag-container">
-    <div class="absolute top-0 left-0 flex flex-column gap-2 p-2">
-      <Button icon="pi pi-play" :disabled="loading" @click="play" />
-      <Button icon="pi pi-times" :disabled="loading" @click="clear" />
+  <div ref="frag-container" id="frag-container" class="w-full h-full">
+    <div class="absolute top-12 left-0 flex flex-column gap-2 p-2">
+      <Button icon="pi pi-play" :disabled="loading" @click="play()" />
+      <Button icon="pi pi-times" :disabled="loading" @click="clear()" />
       <Button
         icon="pi pi-table"
         :style="`background: ${Settings.grids.labelColor}`"
@@ -29,6 +29,8 @@
       />
     </div>
 
+    <div class="absolute top-12 right-0 p-2">{{ getModelsIds() }}</div>
+
     <ConsoleLog :loading="loading" />
   </div>
 </template>
@@ -39,13 +41,12 @@ import { ref, toRef, onMounted, watch } from "vue";
 import ConsoleLog from "./ConsoleLog.vue";
 
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { ViewportGizmo } from "three-viewport-gizmo";
+//import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
-import * as BUI from "@thatopen/ui";
-import * as WEBIFC from "web-ifc";
+//import * as BUI from "@thatopen/ui";
+//import * as WEBIFC from "web-ifc";
 //import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
 
@@ -69,12 +70,13 @@ const Groups: string[] = [
 
 // props
 interface Props {
-  modelValue?: any;
+  data?: any;
   options?: any;
   loading?: boolean;
 }
 const props = withDefaults(defineProps<Props>(), {
-  modelValue: () => {},
+  data: () => {},
+  loading: false,
   options: () => {
     return {
       scaleUnits: [1, 1, 1],
@@ -91,11 +93,12 @@ const props = withDefaults(defineProps<Props>(), {
       },
     };
   },
-  loading: false,
 });
 
+const emit = defineEmits(["update:loading"]);
+
 // toRef
-const data = toRef(props, "modelValue");
+const data = toRef(props, "data");
 const options = toRef(props, "options");
 const loading = toRef(props, "loading");
 
@@ -119,34 +122,34 @@ setPalette(darkMode);
 const Settings = {
   grids: {
     color: "#4CAF50",
-    linewidth: 1,
+    linewidth: 0.5,
     labelColor: "#4CAF50",
   },
   joints: {
-    size: 0.3,
+    size: 0.2,
     color: "#FB8C00",
     labelColor: "#FB8C00",
   },
   frames: {
     color: "#2196F3",
-    linewidth: 0.2,
+    linewidth: 0.3,
     extrudeOpacity: 0.7,
     extrudeColor: "#2196F3",
     labelColor: "#2196F3",
   },
   links: {
     color: "#6200EE",
-    linewidth: 0.3,
+    linewidth: 0.5,
     labelColor: "#6200EE",
   },
   tendons: {
     color: "#B00020",
-    linewidth: 0.5,
+    linewidth: 0.4,
     labelColor: "#B00020",
   },
 };
 
-//
+// init
 let mainContainer: any,
   container: HTMLDivElement | undefined,
   components: OBC.Components,
@@ -156,31 +159,23 @@ let mainContainer: any,
   fragments: any,
   model: any;
 
-//
-const scene: THREE.Scene = new THREE.Scene();
-scene.background = myTri.setColor(palette.value.black);
-
 watch(darkMode, (n: any) => {
   //console.log(`darkMode: ${n}`);
   setPalette(n);
-  //console.warn(`palette: ${palette.value.black}`);
-  scene.background = myTri.setColor(palette.value.black);
+  world.scene.three.background = palette.value.black;
 });
 
 watch(data, () => {
   console.olog(`data updating...`);
   //console.log(`data: ${JSON.stringify(n)}`);
-  clear();
-  //play();
+  clear(model.modelID);
 });
 
 onMounted(async () => {
-  //await initModel();
-  //setTimeout(() => init(), 200);
-
   await setScene();
   await setFragments();
   await setFragmentsModel();
+  //await loadFragmentsModel();
 });
 
 // -------------
@@ -209,6 +204,7 @@ const setScene = async () => {
 
   world.camera.controls?.setLookAt(25, 25, 25, 0, 0, 0);
 
+  world.renderer.showLogo = false;
   world.renderer.three.shadowMap.enabled = true;
   world.renderer.three.shadowMap.type = THREE.VSMShadowMap;
 
@@ -238,54 +234,59 @@ const setScene = async () => {
 // setFragments
 // -------------
 const setFragments = async () => {
-  // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg and returns a blob URL.
+  // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg
+  // and returns a blob URL.
   // You can also pass your own URL to `fragments.init(...)` if you'd rather host the worker yourself.
   const workerUrl = await FRAGS.FragmentsModels.getWorker();
   fragments = components.get(OBC.FragmentsManager);
   fragments.init(workerUrl);
 
   // Remove z fighting
-  fragments.core.models.materials.list.onItemSet.add(({ value: material }) => {
-    if (!("isLodMaterial" in material && material.isLodMaterial)) {
-      material.polygonOffset = true;
-      material.polygonOffsetUnits = 1;
-      material.polygonOffsetFactor = Math.random();
-    }
-  });
+  fragments.core.models.materials.list.onItemSet.add(
+    ({ value: material }: { value: any }) => {
+      if (!("isLodMaterial" in material && material.isLodMaterial)) {
+        material.polygonOffset = true;
+        material.polygonOffsetUnits = 1;
+        material.polygonOffsetFactor = Math.random();
+      }
+    },
+  );
 
   // Temp until we publish the libraries, to be able to use postproduction
   // @ts-ignore
 
   fragments.core.settings.graphicsQuality = 1;
 
-  world.camera.controls.addEventListener("control", () => {
-    fragments.core.update();
-  });
+  world.camera.controls.addEventListener("control", () =>
+    fragments.core.update(),
+  );
 
   // Once a model is available in the list, we can tell it
   // to use shadows and to use the clipping planes we are using
-  fragments.core.models.list.onItemSet.add(({ value: model }) => {
-    model.tiles.onItemSet.add(({ value: mesh }) => {
-      if ("isMesh" in mesh) {
-        const mat = mesh.material as THREE.MeshStandardMaterial[];
-        if (mat[0].opacity === 1) {
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
+  fragments.core.models.list.onItemSet.add(
+    ({ value: model }: { value: any }) => {
+      model.tiles.onItemSet.add(({ value: mesh }: { value: any }) => {
+        if ("isMesh" in mesh) {
+          const mat = mesh.material as THREE.MeshStandardMaterial[];
+          if (mat[0].opacity === 1) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          }
         }
-      }
-    });
+      });
 
-    //model.getClippingPlanesEvent = () => Array.from(world.renderer!.three.clippingPlanes) || [];
-  });
+      //model.getClippingPlanesEvent = () => Array.from(world.renderer!.three.clippingPlanes) || [];
+    },
+  );
 
   world.renderer.postproduction.enabled = true;
-  world.renderer.postproduction.style = OBF.PostproductionAspect.COLOR_PEN;
+  //world.renderer.postproduction.style = OBF.PostproductionAspect.COLOR_PEN;
 };
 
 // -------------
 // setFragmentsModel
 // -------------
-const setFragmentsModel = async (modelId: string = "example") => {
+const setFragmentsModel = async (modelId: string = "my-model") => {
   const bytes = FRAGS.EditUtils.newModel({ raw: true });
   model = await fragments.core.load(bytes, {
     modelId: modelId,
@@ -302,117 +303,73 @@ const setFragmentsModel = async (modelId: string = "example") => {
 };
 
 // -------------
-// init
+// loadFragmentsModel
 // -------------
-const init = async () => {
-  console.olog("init");
+const loadFragmentsModel = async (modelId: string = "my-model") => {
+  // https://github.com/ThatOpen/engine_fragment/tree/main/resources/frags
+  const file = await fetch(
+    //"https://thatopen.github.io/engine_fragment/resources/frags/school_arq.frag",
+    //"https://thatopen.github.io/engine_fragment/resources/frags/school_str.frag",
+    "https://thatopen.github.io/engine_fragment/resources/frags/small_test.frag",
+  );
+  const buffer = await file.arrayBuffer();
+  model = await fragments.core.load(buffer, { modelId: modelId });
+  //console.log(model);
 
-  const container = document.getElementById(
-    "my-viewer-container",
-  ) as HTMLDivElement;
-  if (!container) throw new Error("Missing #my-viewer-container container");
+  world.scene.three.add(model.object);
+  await fragments.core.update(true);
+};
 
-  const w: number = container.clientWidth,
-    h: number = container.clientHeight;
-  console.olog(`container > w, h : ${w} ${h}`);
+// -------------
+// resetFragmentsModel
+// -------------
+const resetFragmentsModel = async (modelId: string = "my-model") => {
+  await fragments.core.editor.reset(modelId);
+  //await fragments.core.update(true);
+};
 
-  // set camera
-  const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
-  camera.position.set(0, 5, 10);
+// -------------
+// getModels
+// -------------
+const getModels = () => {
+  const models = fragments.core.models.list.values();
+  [...models].map((model) => console.log(model.modelId));
+};
 
-  // set renderer
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(w, h);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  container?.appendChild(renderer.domElement);
+// -------------
+// getBinaryData
+// -------------
+const getBinaryData = async (modelId: string = "my-model") => {
+  const model = fragments.core.models.list.get(modelId);
+  if (!model) return null;
+  const buffer = await model.getBuffer(false);
+  return { name: model.modelId, buffer };
+};
 
-  // controls
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.target.set(0, 0.8, 0);
-  controls.minDistance = 1;
-  controls.maxDistance = 1000;
-  controls.update();
+// -------------
+// getModelsIds
+// -------------
+const getModelsIds = () => {
+  const models = fragments.core.models.list.values();
+  //console.log("getModelsIds", models);
+  const ids = [...models].map((model) => model.modelId);
+  //console.log("getModelsIds", ids);
+  return ids;
+};
 
-  // on control change
-  controls.addEventListener("change", () => {
-    //if (scene && camera && renderer)
-    renderer.render(scene, camera);
-  });
+// -------------
+// disposeModels
+// -------------
+const disposeModels = async (ids = getModelsIds()) => {
+  //console.log("disposeModels > ids", ids);
 
-  // gizmo
-  const gizmo = new ViewportGizmo(camera, renderer, {
-    // Position options: "top-left" | "top-right" | "bottom-left" | "bottom-right"
-    placement: "bottom-left",
-    size: 100, // Size of the gizmo in pixels
-    offset: {
-      left: 64,
-      bottom: 64,
-    },
-    y: { label: "Z" },
-    z: { label: "Y" },
-  });
-  gizmo.attachControls(controls);
+  const promises = [];
+  for (const id of ids) promises.push(fragments.core.disposeModel(id));
+  //console.log("disposeModels > promises", promises);
 
-  //
-  // init scene
-  //
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  scene.add(ambientLight);
-
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(5, 8, 3);
-  scene.add(directionalLight);
-
-  scene.add(myTri.setAxesHelper({}));
-
-  //
-  //
-  const render4ever = () => {
-    requestAnimationFrame(render4ever.bind(this));
-    if (controls) controls.update();
-    if (scene && camera && renderer) {
-      renderer.render(scene, camera);
-      gizmo.render();
-    }
-  };
-  render4ever();
-
-  //
-  // Animation loop
-  /*
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-  */
-
-  // Handle window resize
-  window.addEventListener("resize", () => {
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-
-    gizmo.update();
-  });
-
-  // on container size change
-  new ResizeObserver((entries) => {
-    //console.log("ResizeObserver", entries);
-    const c = entries[0].contentRect;
-
-    camera.aspect = c.width / c.height;
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(c.width, c.height);
-    //if (renderer && scene && camera)
-    renderer.render(scene, camera);
-
-    gizmo.update();
-  }).observe(container);
+  console.olog("dispose all models...");
+  await Promise.all(promises);
+  console.olog("all models have been disposed!");
 };
 
 // -------------
@@ -530,17 +487,88 @@ const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
 };
 
 // -------------
+// _test
+// -------------
+const _test = async (): Promise<void> => {
+  // cerchio 2D
+  const shape = new THREE.Shape();
+
+  const radius: number = 0.15,
+    slices: number = 18;
+  for (let i = 0; i < slices; i++) {
+    const alpha: number = (i * 2 * Math.PI) / slices,
+      ca: number = Math.cos(alpha),
+      sa: number = Math.sin(alpha);
+    //console.log(i, alpha, ca, sa);
+    i < 1
+      ? shape.moveTo(radius * ca, radius * sa)
+      : shape.lineTo(radius * ca, radius * sa); // P
+  }
+  shape.closePath();
+
+  for (let i = 0; i < 5; i++) {
+    for (let j = 0; j < 5; j++) {
+      //for (let k = 0; k < 5; k++) {
+      // joints
+      const start = new THREE.Vector3(i, 0, j);
+      const end = new THREE.Vector3(i + j / 5, 3, j);
+
+      // vettore direzione
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const normalized = direction.clone().normalize();
+
+      // estrusione
+      const extrudeSettings = {
+        depth: length,
+        //steps: 1,
+        bevelEnabled: false,
+      };
+
+      const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(
+        shape,
+        extrudeSettings,
+      );
+
+      // asse Z locale
+      const zAxis = new THREE.Vector3(0, 0, 1);
+
+      // rotazione verso il target
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(
+        zAxis,
+        normalized,
+      );
+
+      geometry.applyQuaternion(quaternion);
+
+      // traslazione nello start point
+      geometry.translate(start.x, start.y, start.z);
+
+      // material
+      const material: THREE.MeshStandardMaterial =
+        new THREE.MeshStandardMaterial({
+          color: "#2196F3",
+          //color: new THREE.Color(i, j, i + j),
+        });
+
+      // mesh
+      const mesh: THREE.Mesh = new THREE.Mesh(geometry, material);
+      // add
+      world.scene.three.add(mesh);
+      //}
+    }
+  }
+};
+
+// -------------
 // play()
 // -------------
-const play = async () => {
-  //console.log("play");
-
-  //loading.value = true;
-
+const _play = async (): Promise<void> => {
   // clear
-  clear();
+  await clear(model.modelID);
 
-  console.olog("play");
+  console.olog("_play");
+  //const elementsData: FRAGS.NewElementData[] = [];
 
   //
   // Groups
@@ -584,11 +612,10 @@ const play = async () => {
 
     if (line && label) {
       //const group = scene.getObjectByName("grids");
-      //if (group) {group.add(line); group.add(label);}
       const group = world.scene.three.getObjectByName("grids");
       if (group) {
-        world.scene.three.add(line);
-        world.scene.three.add(label);
+        group.add(line);
+        group.add(label);
       }
     }
   }
@@ -619,9 +646,8 @@ const play = async () => {
 
     if (label) {
       //const group = scene.getObjectByName("jointsLabels");
-      //if (group) group.add(label);
       const group = world.scene.three.getObjectByName("jointsLabels");
-      if (group) world.scene.three.add(label);
+      if (group) group.add(label);
     }
   }
 
@@ -689,9 +715,8 @@ const play = async () => {
 
     if (line) {
       //const group = scene.getObjectByName("links");
-      //if (group) group.add(line);
       const group = world.scene.three.getObjectByName("links");
-      if (group) world.scene.three.add(line);
+      if (group) group.add(line);
     }
   }
 
@@ -724,31 +749,50 @@ const play = async () => {
 
     if (line) {
       //const group = scene.getObjectByName("tendons");
-      //if (group) group.add(line);
       const group = world.scene.three.getObjectByName("tendons");
-      if (group) world.scene.three.add(line);
+      if (group) group.add(line);
     }
   }
 
-  //loading.value = false;
+  return;
+};
+const play = async () => {
+  emit("update:loading", true);
+
+  try {
+    await _play();
+    //await _test();
+    emit("update:loading", false);
+  } catch (error) {
+    console.error("play > error:", error);
+  }
 };
 
 // -------------
 // clear scene
 // -------------
-const clear = () => {
+const clear = async (modelId: string = "my-model") => {
   console.olog("clear");
-  myTri.clear(scene);
 
-  // re-init
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  scene.add(ambientLight);
+  // dispose all models
+  await disposeModels();
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  directionalLight.position.set(5, 8, 3);
-  scene.add(directionalLight);
+  //
+  //await resetFragmentsModel(modelId);
 
-  scene.add(myTri.setAxesHelper({}));
+  myTri.clear(world.scene.three);
+
+  // re-set
+  world.camera.controls?.setLookAt(25, 25, 25, 0, 0, 0);
+
+  //const grids: OBC.Grids = components.get(OBC.Grids);
+  //grids.create(world);
+
+  const axes: THREE.AxesHelper = new THREE.AxesHelper(1);
+  world.scene.three.add(axes);
+
+  //
+  await setFragmentsModel(modelId);
 };
 
 // -------------
@@ -761,9 +805,9 @@ const setObjectVisible = (
   if (!name) return;
 
   myTri.setObjectVisible({
-    scene,
-    name: name,
-    visible: visible,
+    scene: world.scene.three,
+    name,
+    visible,
   });
 };
 </script>
@@ -775,7 +819,8 @@ const setObjectVisible = (
   margin: 0;
   padding: 0;
   width: 100%;
-  height: calc(100vh - 156px);
+  height: 100%;
+  /* height: calc(100vh - 156px); */
   /* min-height: 500px;*/
   /* border: 1px solid; */
 }

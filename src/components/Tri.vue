@@ -1,6 +1,14 @@
 <template>
-  <div class="flex flex-col gap-2 p-2 w-full h-full border-1">
-    <div class="flex flex-row gap-2">
+  <div class="relative w-full border-1">
+    <div class="absolute w-full h-full">
+      <TriFragments
+        v-model:data="dataTri"
+        v-model:loading="loading"
+        :options="{ scaleUnits: scaleUnits, xyzLimits: xyzLimits }"
+      />
+    </div>
+
+    <div class="absolute top-0 left-0 w-full p-2 flex flex-row gap-2">
       <!-- select job -->
       <Select
         v-model="job"
@@ -39,14 +47,6 @@
       </div>
 
       <div class="mt-2">{{ CurrUnits }}</div>
-    </div>
-
-    <div>
-      <TriViewer
-        v-model="dataTri"
-        :loading="loading"
-        :options="{ scaleUnits: scaleUnits, xyzLimits: xyzLimits }"
-      />
     </div>
 
     <!-- Tables S2k (tableData) -->
@@ -154,7 +154,7 @@ import "vue-json-pretty/lib/styles.css";
 
 import ExcelJS from "exceljs";
 
-import TriViewer from "./TriViewer.vue";
+//import TriViewer from "./TriViewer.vue";
 import TriFragments from "./TriFragments.vue";
 import SectionEditor from "./SectionEditor.vue";
 
@@ -861,7 +861,7 @@ const dataToTri = (data: DataTri = {}): DataTri => {
     }
   }
 
-  console.log("dataToTri", dataToTri);
+  //console.log("dataToTri", dataToTri);
   return dataToTri;
 };
 
@@ -996,5 +996,3 @@ const xyzLimits = computed(() => {
   };
 });
 </script>
-
-<style scoped></style>

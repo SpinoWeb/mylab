@@ -289,18 +289,17 @@ export const myTri = {
     scene: THREE.Scene;
     name: string | undefined;
     visible: boolean | undefined;
-  }) {
+  }): THREE.Scene {
     //console.log("setObjectVisible", scene, name, visible);
-    if (!name) return;
+    if (!name) return scene;
 
     const object: THREE.Object3D | undefined = scene.getObjectByName(name);
     if (object) {
       object.visible = visible !== undefined ? visible : !object.visible;
       //console.log("setObjectVisible", name, object.visible);
-      return object.visible;
     }
 
-    return;
+    return scene;
   },
 
   //
