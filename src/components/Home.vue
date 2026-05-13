@@ -13,6 +13,7 @@ const tests = ref([
   { route: "/tri", icon: "pi pi-box", label: "Tri" },
   { route: "/that-open", icon: "pi pi-apple", label: "ThatOpen" },
   { route: "/fragments", icon: "pi pi-android", label: "Fragments" },
+  { route: "/ifc-lite", icon: "pi pi-amazon", label: "IfcLite" },
 ]);
 </script>
 

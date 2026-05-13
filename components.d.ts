@@ -33,6 +33,7 @@ declare module 'vue' {
     Gantt: typeof import('./src/components/Gantt.vue')['default']
     Handle: typeof import('./src/components/SectionEditor/Handle.vue')['default']
     Home: typeof import('./src/components/Home.vue')['default']
+    IfcLite: typeof import('./src/components/IfcLite.vue')['default']
     InputText: typeof import('primevue/inputtext')['default']
     Line: typeof import('./src/components/SectionEditor/Line.vue')['default']
     MultiSelect: typeof import('primevue/multiselect')['default']

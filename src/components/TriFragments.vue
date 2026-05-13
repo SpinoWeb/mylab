@@ -340,6 +340,8 @@ const getModels = () => {
 // getBinaryData
 // -------------
 const getBinaryData = async (modelId: string = "my-model") => {
+  if (!fragments) return;
+
   const model = fragments.core.models.list.get(modelId);
   if (!model) return null;
   const buffer = await model.getBuffer(false);
@@ -350,6 +352,8 @@ const getBinaryData = async (modelId: string = "my-model") => {
 // getModelsIds
 // -------------
 const getModelsIds = () => {
+  if (!fragments) return;
+
   const models = fragments.core.models.list.values();
   //console.log("getModelsIds", models);
   const ids = [...models].map((model) => model.modelId);
@@ -362,12 +366,13 @@ const getModelsIds = () => {
 // -------------
 const disposeModels = async (ids = getModelsIds()) => {
   //console.log("disposeModels > ids", ids);
+  if (!ids) return;
 
   const promises = [];
   for (const id of ids) promises.push(fragments.core.disposeModel(id));
   //console.log("disposeModels > promises", promises);
 
-  console.olog("dispose all models...");
+  console.olog("disposing all models...");
   await Promise.all(promises);
   console.olog("all models have been disposed!");
 };
