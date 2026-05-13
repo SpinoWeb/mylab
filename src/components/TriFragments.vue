@@ -16,6 +16,18 @@
         @click="setObjectVisible('jointsLabels')"
       />
       <Button
+        icon="pi pi-tag"
+        :style="`background: ${Settings.frames.labelColor}`"
+        :disabled="loading"
+        @click="setObjectVisible('framesLabels')"
+      />
+      <Button
+        icon="pi pi-arrow-right"
+        :style="`background: ${Settings.frames.labelColor}`"
+        :disabled="loading"
+        @click="setObjectVisible('framesLocalAxes')"
+      />
+      <Button
         icon="pi pi-bolt"
         :style="`background: ${Settings.links.color}`"
         :disabled="loading"
@@ -578,7 +590,7 @@ const _play = async (): Promise<void> => {
   //
   // Groups
   //
-  console.olog("--------------------------");
+  console.olog("--- Groups ---");
   for (const Group of Groups) {
     console.olog(`Group: ${Group}`);
 
@@ -594,7 +606,7 @@ const _play = async (): Promise<void> => {
   // Grids
   // CoordSys AxisDir GridID XRYZCoord LineType LineColor Visible BubbleLoc AllVisible BubbleSize
   //
-  console.olog("--------------------------");
+  console.olog("--- Grids ---");
   let BubbleSize: number = 1 / options.value.scaleUnits[1];
   const GridLines = data.value.hasOwnProperty("Grids")
     ? data.value["Grids"]
@@ -628,7 +640,7 @@ const _play = async (): Promise<void> => {
   //
   // Joints
   //
-  console.olog("--------------------------");
+  console.olog("--- Joints ---");
   const JointCoordinates = data.value.hasOwnProperty("Joints")
     ? data.value["Joints"]
     : [];
@@ -657,21 +669,45 @@ const _play = async (): Promise<void> => {
   }
 
   // Frames
-  console.olog("--------------------------");
+  console.olog("--- Frames ---");
   const ConnectivityFrame = data.value.hasOwnProperty("Frames")
     ? data.value["Frames"]
     : [];
   for (let i = 0; i < ConnectivityFrame.length; i++) {
-    const { Frame, JointI, JointJ } = ConnectivityFrame[i];
+    const { Frame, JointI, JointJ, Shape } = ConnectivityFrame[i];
     console.olog(`Frame: ${Frame} > (${JointI}, ${JointJ})`);
 
     const start = JointCoordinates.find((k: any) => k.Joint == JointI);
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
+    const Offset: [number, number, number, number, number, number] = [
+      0, 0, 0, 0, 0, 0,
+    ];
+
     const vertex = [
       { X: start.XorR, Y: start.Z, Z: start.Y },
       { X: end.XorR, Y: end.Z, Z: end.Y },
     ];
+
+    //
+    // centroid
+    //
+    const total: Point3D = vertex.reduce(
+      (acc, p) => {
+        return { X: acc.X + p.X, Y: acc.Y + p.Y, Z: acc.Z + p.Z };
+      },
+      { X: 0, Y: 0, Z: 0 },
+    );
+    const centroid: Point3D = {
+      X: total.X / vertex.length,
+      Y: total.Y / vertex.length,
+      Z: total.Z / vertex.length,
+    };
+    //console.log(centroid);
+
+    //
+    // scale
+    //
     const scale = {
       X: options.value.scaleUnits[1],
       Y: options.value.scaleUnits[1],
@@ -686,10 +722,246 @@ const _play = async (): Promise<void> => {
     });
     //if (line) scene.add(line);
     if (line) world.scene.three.add(line);
+
+    //
+    // midpoint + Offset
+    //
+    const midpoint: number[] = [
+      (start.XorR + Offset[0] + end.XorR + Offset[3]) / 2,
+      (start.Z + Offset[1] + end.Z + Offset[4]) / 2,
+      (start.Y + Offset[2] + end.Y + Offset[5]) / 2,
+    ].map((k: number) => k * options.value.scaleUnits[1]);
+    //console.log(midpoint);
+
+    //
+    // direction
+    //
+    const jI: THREE.Vector3 = new THREE.Vector3(
+      start.XorR * options.value.scaleUnits[1],
+      start.Z * options.value.scaleUnits[1],
+      start.Y * options.value.scaleUnits[1],
+    );
+    const jJ: THREE.Vector3 = new THREE.Vector3(
+      end.XorR * options.value.scaleUnits[1],
+      end.Z * options.value.scaleUnits[1],
+      end.Y * options.value.scaleUnits[1],
+    );
+    const direction: THREE.Vector3 = new THREE.Vector3().subVectors(jJ, jI);
+    //const length: number = direction.length();
+    const axisDirection = direction.normalize();
+
+    //
+    // add local AxesHelper
+    //
+    const localAxes: THREE.AxesHelper = new THREE.AxesHelper(0.5);
+
+    // Use quaternion to rotate localAxes from default to target orientation
+    const quaternion: THREE.Quaternion = new THREE.Quaternion();
+    const xAxis: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
+    quaternion.setFromUnitVectors(xAxis, axisDirection);
+    localAxes.geometry.applyQuaternion(quaternion);
+
+    // translate to midpoint of frame
+    localAxes.geometry.translate(midpoint[0], midpoint[1], midpoint[2]);
+
+    // add name
+    localAxes.name = `Frame-${Frame}-LocalAxes`;
+
+    // add localAxes to group framesLocalAxes
+    const group = world.scene.three.getObjectByName("framesLocalAxes");
+    if (group) group.add(localAxes);
+
+    //
+    // add label
+    //
+    const label: THREE.Sprite | undefined = myTri.getLabel({
+      name: `Frame-${Frame}-Label`,
+      text: Frame,
+      vertex: centroid,
+      scale: scale,
+      color: Settings?.frames?.labelColor,
+    });
+
+    if (label) {
+      const group = world.scene.three.getObjectByName("framesLabels");
+      if (group) group.add(label);
+    }
+
+    //
+    // extrude / solid
+    //
+
+    // extrude
+    //
+
+    // direction to extrude
+    const startExtrude: THREE.Vector3 = new THREE.Vector3(
+      (start.XorR + Offset[0]) * options.value.scaleUnits[1],
+      (start.Z + Offset[1]) * options.value.scaleUnits[1],
+      (start.Y + Offset[2]) * options.value.scaleUnits[1],
+    );
+    const endExtrude: THREE.Vector3 = new THREE.Vector3(
+      (end.XorR + Offset[3]) * options.value.scaleUnits[1],
+      (end.Z + Offset[4]) * options.value.scaleUnits[1],
+      (end.Y + Offset[5]) * options.value.scaleUnits[1],
+    );
+    const directionExtrude: THREE.Vector3 = new THREE.Vector3().subVectors(
+      endExtrude,
+      startExtrude,
+    );
+    const lengthExtrude: number = directionExtrude.length();
+    const axisDirectionExtrude = directionExtrude.clone().normalize();
+
+    const Xg: number = centroid.X * options.value.scaleUnits[1],
+      Yg: number = centroid.Y * options.value.scaleUnits[1];
+
+    let shapes: THREE.Shape[] = [];
+
+    // cerchio 2D
+    const shape = new THREE.Shape();
+
+    const radius: number = 0.15,
+      slices: number = 18;
+    for (let i = 0; i < slices; i++) {
+      const alpha: number = (i * 2 * Math.PI) / slices,
+        ca: number = Math.cos(alpha),
+        sa: number = Math.sin(alpha);
+      //console.log(i, alpha, ca, sa);
+      i < 1
+        ? shape.moveTo(radius * ca, radius * sa)
+        : shape.lineTo(radius * ca, radius * sa); // P
+    }
+    shape.closePath();
+
+    /*
+    if (Shape === "SD Section") {
+      // 'SD Section' > polygons
+      //
+
+      if (!this.Polys) return;
+
+      // get ShapeNames list
+      let ShapeNames: string[] = [...this.Polys].map((p: any) => p.ShapeName);
+      ShapeNames = [...new Set(ShapeNames)]; // remove duplicates
+      //console.log("MyFrame > create > ShapeNames", this.AnalSect, ShapeNames);
+
+      for (const ShapeName of ShapeNames) {
+        const polys = [...this.Polys].filter(
+          (p: any) => p.ShapeName === ShapeName,
+        );
+        //console.log("MyFrame > create > polys", polys);
+
+        // new shape
+        let shape: THREE.Shape = new THREE.Shape();
+        //shape.moveTo(-Xg1, -Yg1);
+
+        // moveTo first point
+        let { X, Y }: { X: number; Y: number } = polys[0];
+        //console.log("MyFrame > create > X, Y", X, Y);
+
+        let X0: number = -Xg + X;
+        let Y0: number = -Yg + Y;
+        //console.log("MyFrame > create > X0, Y0", X0, Y0);
+        shape.moveTo(X0, Y0);
+
+        // intermediate points
+        for (let p: number = 1; p < polys.length; p++) {
+          //for (let p: number = polys.length - 1; p >= 0; p--) {
+          const { X, Y }: { X: number; Y: number } = polys[p];
+          //console.log("MyFrame > create > X, Y", X, Y);
+          shape.lineTo(-Xg + X, -Yg + Y);
+        }
+
+        // last == first point
+        shape.lineTo(X0, Y0);
+
+        // add shape
+        shapes.push(shape);
+      }
+    } else {
+      // not 'SD Section' > vertex
+      //
+      //console.log("MyFrame > create > vertex", this.AnalSect, this.vertex);
+      for (const vtx of this.Vertex) {
+        const { points }: { points: Point2D[] } = vtx;
+        //console.log("MyFrame > create > points", this.AnalSect, points);
+
+        // new shape
+        let shape: THREE.Shape = new THREE.Shape();
+
+        // moveTo first point
+        let { X, Y }: { X: number; Y: number } = points[0];
+
+        let X0: number = -Xg + X;
+        let Y0: number = -Yg + Y;
+        //console.log("MyFrame > create > X0, Y0", X0, Y0);
+        shape.moveTo(X0, Y0);
+
+        // intermediate points
+        for (let p: number = 1; p < points.length; p++) {
+          const { X, Y }: { X: number; Y: number } = points[p];
+          //console.log("MyFrame > create > X, Y", X, Y);
+          shape.lineTo(-Xg + X, -Yg + Y);
+        }
+
+        // last point = first point
+        shape.lineTo(X0, Y0);
+
+        // add shape
+        shapes.push(shape);
+      }
+    }
+    */
+    //console.log("MyFrame > create > shapes", shapes);
+
+    // estrusione
+    const extrudeSettings = {
+      depth: lengthExtrude,
+      bevelEnabled: false,
+    };
+
+    const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(
+      shape,
+      extrudeSettings,
+    );
+
+    // asse Z locale
+    const zAxis = new THREE.Vector3(0, 0, 1);
+
+    // rotazione verso il target
+    const quaternionExtrude = new THREE.Quaternion().setFromUnitVectors(
+      zAxis,
+      axisDirectionExtrude,
+    );
+
+    geometry.applyQuaternion(quaternionExtrude);
+
+    // traslazione nello start point
+    geometry.translate(
+      start.XorR * options.value.scaleUnits[1],
+      start.Z * options.value.scaleUnits[1],
+      start.Y * options.value.scaleUnits[1],
+    );
+
+    // material
+    const material1: THREE.MeshStandardMaterial =
+      new THREE.MeshStandardMaterial({
+        color: Settings?.frames?.extrudeColor,
+      });
+
+    // solids == mesh
+    const material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial({
+      color: Settings?.frames?.extrudeColor,
+    });
+
+    // mesh
+    const mesh: THREE.Mesh = new THREE.Mesh(geometry, material);
+    // add
+    //world.scene.three.add(mesh);
   }
 
   // Links
-  console.olog("--------------------------");
+  console.olog("--- Links ---");
   const ConnectivityLink = data.value.hasOwnProperty("Links")
     ? data.value["Links"]
     : [];
@@ -726,7 +998,7 @@ const _play = async (): Promise<void> => {
   }
 
   // Tendons
-  console.olog("--------------------------");
+  console.olog("--- Tendons ---");
   const ConnectivityTendon = data.value.hasOwnProperty("Tendons")
     ? data.value["Tendons"]
     : [];
