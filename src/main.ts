@@ -6,8 +6,8 @@ import App from "./App.vue";
 import "/node_modules/primeflex/primeflex.css";
 
 // HighCharts
-//import "./highcharts.css";
-//import "./dashboards.css"; // HighCharts light or dark mode
+import "./highcharts.css";
+import "./dashboards.css"; // HighCharts light or dark mode
 
 import "primeicons/primeicons.css";
 import PrimeVue from "primevue/config";

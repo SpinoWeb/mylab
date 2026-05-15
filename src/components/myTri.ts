@@ -256,7 +256,11 @@ export const myTri = {
     if (!name) name = "New Group";
     if (!visible) visible = true;
 
-    return Object.assign(new THREE.Group(), { name: name, visible: visible });
+    let group: THREE.Group = new THREE.Group();
+    group.name = name;
+    group.visible = visible;
+
+    return group;
   },
 
   //

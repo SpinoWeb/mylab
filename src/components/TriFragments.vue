@@ -28,6 +28,12 @@
         @click="setObjectVisible('framesLocalAxes')"
       />
       <Button
+        icon="pi pi-box"
+        :style="`background: ${Settings.frames.extrudeColor}`"
+        :disabled="loading"
+        @click="setObjectVisible('framesSolids')"
+      />
+      <Button
         icon="pi pi-bolt"
         :style="`background: ${Settings.links.color}`"
         :disabled="loading"
@@ -63,8 +69,9 @@ import * as OBF from "@thatopen/components-front";
 import * as FRAGS from "@thatopen/fragments";
 
 import { myTri } from "./myTri";
+import { myS2k } from "../services/myS2k";
 
-import { Point3D } from "../services/Types";
+import { Point2D, Point3D, Section, Polygon } from "../services/Types";
 
 //
 // groups
@@ -211,6 +218,9 @@ const setScene = async () => {
   world.scene = new OBC.ShadowedScene(components);
   world.renderer = new OBF.PostproductionRenderer(components, container);
   world.camera = new OBC.OrthoPerspectiveCamera(components);
+
+  // Source - https://stackoverflow.com/a/44781658
+  //world.camera.up.set(0, 0, 1);
 
   components.init();
 
@@ -397,13 +407,17 @@ const addGrid = async ({
   AxisDir,
   XRYZCoord,
   BubbleSize,
+  scale,
 }: {
   GridID: string;
   AxisDir: string;
   XRYZCoord: number;
   BubbleSize?: number;
+  scale?: Point3D;
 }) => {
   //console.log("addGrid");
+
+  if (!scale) scale = { X: 1, Y: 1, Z: 1 };
 
   // get setting from model
   const color: string | undefined = Settings?.grids?.color;
@@ -434,12 +448,6 @@ const addGrid = async ({
   // skip z (vertical)
   //if (AxisDir === "Z") return;
 
-  const scale = {
-    X: options.value.scaleUnits[1],
-    Y: options.value.scaleUnits[1],
-    Z: options.value.scaleUnits[1],
-  };
-
   // line
   const line: THREE.Line | undefined = myTri.getLine({
     name: `Grid-${GridID}`,
@@ -466,19 +474,23 @@ const addGrid = async ({
 // -------------
 // addJoint
 // -------------
-const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
+const addJoint = ({
+  Joint,
+  XYZ,
+  scale,
+}: {
+  Joint: string;
+  XYZ: Point3D;
+  scale?: Point3D;
+}) => {
   //const id: string = uuidv4();
+
+  if (!scale) scale = { X: 1, Y: 1, Z: 1 };
 
   // get setting from model
   const color: string | undefined = Settings?.joints?.color;
   const size: number | undefined = Settings?.joints?.size;
   const labelColor: string | undefined = Settings?.joints?.labelColor;
-
-  const scale = {
-    X: options.value.scaleUnits[1],
-    Y: options.value.scaleUnits[1],
-    Z: options.value.scaleUnits[1],
-  };
 
   // point
   const point: THREE.Points = myTri.getPoint({
@@ -501,6 +513,356 @@ const addJoint = ({ Joint, XYZ }: { Joint: string; XYZ: Point3D }) => {
 
   //
   return { point: point, label: label };
+};
+
+// -------------
+// addFrame
+// -------------
+const addFrame = ({
+  Frame,
+  start,
+  end,
+  scale,
+}: {
+  Frame: string;
+  start: Point3D;
+  end: Point3D;
+  scale?: Point3D;
+}) => {
+  //console.log("addFrame");
+
+  if (!scale) scale = { X: 1, Y: 1, Z: 1 };
+
+  // get setting from model
+  const color: string | undefined = Settings?.frames?.color;
+  //const size: number | undefined = Settings?.frames?.size;
+  const labelColor: string | undefined = Settings?.frames?.labelColor;
+  const extrudeColor: string | undefined = Settings?.frames?.extrudeColor;
+  const extrudeOpacity: number | undefined = Settings?.frames?.extrudeOpacity;
+  const linewidth: number | undefined = Settings?.frames?.linewidth;
+  //console.log("myFrame > create > color", color);
+
+  const vertex = [
+    { X: start.X, Y: start.Y, Z: start.Z },
+    { X: end.X, Y: end.Y, Z: end.Z },
+  ];
+
+  //
+  // midpoint
+  //
+  const total: Point3D = vertex.reduce(
+    (acc, p) => {
+      return { X: acc.X + p.X, Y: acc.Y + p.Y, Z: acc.Z + p.Z };
+    },
+    { X: 0, Y: 0, Z: 0 },
+  );
+  const midpoint: Point3D = {
+    X: (scale.X * total.X) / vertex.length,
+    Y: (scale.Y * total.Y) / vertex.length,
+    Z: (scale.Z * total.Z) / vertex.length,
+  };
+  //console.log(midpoint);
+
+  const line: THREE.Line | undefined = myTri.getLine({
+    name: `Frame-${Frame}`,
+    vertex: vertex,
+    scale: scale,
+    color: color,
+  });
+
+  //
+  // label
+  //
+  const label: THREE.Sprite | undefined = myTri.getLabel({
+    name: `Frame-${Frame}-Label`,
+    text: Frame,
+    vertex: midpoint,
+    color: labelColor,
+  });
+
+  //
+  // direction
+  //
+  const jI: THREE.Vector3 = new THREE.Vector3(
+    start.X * scale.X,
+    start.Y * scale.Y,
+    start.Z * scale.Z,
+  );
+  const jJ: THREE.Vector3 = new THREE.Vector3(
+    end.X * scale.X,
+    end.Y * scale.Y,
+    end.Z * scale.Z,
+  );
+  const direction: THREE.Vector3 = new THREE.Vector3().subVectors(jJ, jI);
+  //const length: number = direction.length();
+  const axisDirection: THREE.Vector3 = direction.normalize();
+
+  //
+  // localAxes
+  //
+  const localAxes: THREE.AxesHelper = new THREE.AxesHelper(0.5);
+
+  // Use quaternion to rotate localAxes from default to target orientation
+  const quaternion: THREE.Quaternion = new THREE.Quaternion();
+  const xAxis: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
+  quaternion.setFromUnitVectors(xAxis, axisDirection);
+  localAxes.geometry.applyQuaternion(quaternion);
+
+  // translate to midpoint of frame
+  localAxes.geometry.translate(midpoint.X, midpoint.Y, midpoint.Z);
+
+  // add name
+  localAxes.name = `Frame-${Frame}-LocalAxes`;
+
+  //
+  return { line: line, label: label, localAxes: localAxes, midpoint: midpoint };
+};
+
+// -------------
+// addFrameExtrude
+// -------------
+const addFrameExtrude = ({
+  Frame,
+  start,
+  end,
+  Offset,
+  section,
+  polygons,
+  scale,
+}: {
+  Frame: string;
+  start: Point3D;
+  end: Point3D;
+  Offset?: [number, number, number, number, number, number];
+  section: Section;
+  polygons?: Polygon[];
+  scale?: Point3D;
+}) => {
+  //console.log("addFrameExtrude", Offset);
+
+  const q0: number = 180;
+  let q: number = 0;
+
+  if (!Offset) Offset = [0, 0, 0, 0, 0, 0];
+  //if (!section) return;
+  if (!polygons) polygons = [];
+  if (!scale) scale = { X: 1, Y: 1, Z: 1 };
+
+  // get setting from model
+  //const color: string | undefined = Settings?.frames?.color;
+  //const size: number | undefined = Settings?.frames?.size;
+  //const labelColor: string | undefined = Settings?.frames?.labelColor;
+  const extrudeColor: string | undefined = Settings?.frames?.extrudeColor;
+  const extrudeOpacity: number | undefined = Settings?.frames?.extrudeOpacity;
+  //const linewidth: number | undefined = Settings?.frames?.linewidth;
+
+  // direction to extrude
+  const startExtrude: THREE.Vector3 = new THREE.Vector3(
+    (start.X + Offset[0]) * scale.X,
+    (start.Y + Offset[1]) * scale.Y,
+    (start.Z + Offset[2]) * scale.Z,
+  );
+  const endExtrude: THREE.Vector3 = new THREE.Vector3(
+    (end.X + Offset[3]) * scale.X,
+    (end.Y + Offset[4]) * scale.Y,
+    (end.Z + Offset[5]) * scale.Z,
+  );
+  const directionExtrude: THREE.Vector3 = new THREE.Vector3().subVectors(
+    endExtrude,
+    startExtrude,
+  );
+  const lengthExtrude: number = directionExtrude.length();
+  const axisDirectionExtrude: THREE.Vector3 = directionExtrude.normalize();
+  //console.log("lengthExtrude", lengthExtrude);
+
+  const { Shape } = section;
+
+  // init getPolygons array
+  let getPolygons: Polygon[] = [];
+  let shapes: THREE.Shape[] = [];
+
+  if (Shape === "SD Section") {
+    // "YES" SD Section
+    q = 0;
+    const getPolygons = myS2k.getSDSectionPolygons({
+      Section: section,
+      Polygons: polygons,
+      //Materials: [],
+    });
+    //console.log("getPolygons", getPolygons);
+
+    // properties of polygons for svg
+    const polygonsProperties = myS2k.getPolygonsProperties(getPolygons);
+    //console.log("polygonsProperties", polygonsProperties);
+
+    const Xg: number = polygonsProperties.centroid?.X,
+      Yg: number = polygonsProperties.centroid?.Y;
+
+    // get ShapeNames list
+    let ShapeNames: string[] = [...polygons].map((p: any) => p.ShapeName);
+    ShapeNames = [...new Set(ShapeNames)]; // remove duplicates
+    //console.log("ShapeNames", ShapeNames);
+
+    for (const ShapeName of ShapeNames) {
+      const polys: Polygon[] = [...polygons].filter(
+        (p: any) => p.ShapeName === ShapeName,
+      );
+      //console.log("polys", polys.length);
+
+      const { points }: { points?: Point2D[] } = polys[0];
+      //console.log("points", points);
+      if (!points) continue;
+
+      // new shape
+      let shape: THREE.Shape = new THREE.Shape();
+      //shape.moveTo(-Xg1, -Yg1);
+
+      // moveTo first point
+      let { X, Y }: { X: number; Y: number } = points[0];
+      //console.log("X, Y", X, Y);
+
+      let X0: number = (-Xg + X) * scale.X;
+      let Y0: number = (-Yg + Y) * scale.Y;
+      //console.log("X0, Y0", X0, Y0);
+      shape.moveTo(X0, Y0);
+
+      // intermediate points
+      for (let p: number = 1; p < points.length; p++) {
+        const { X, Y }: { X: number; Y: number } = points[p];
+        //console.log("X, Y", (-Xg + X) * scale.X, (-Yg + Y) * scale.Y);
+        shape.lineTo((-Xg + X) * scale.X, (-Yg + Y) * scale.Y);
+      }
+
+      // last == first point
+      shape.lineTo(X0, Y0);
+
+      // add shape
+      shapes.push(shape);
+    }
+  } else {
+    // "NO" SD Section
+    q = q0;
+    getPolygons = myS2k.getPolygons({ section: section });
+    //console.log("getPolygons", getPolygons);
+
+    // properties of polygons for svg
+    const polygonsProperties = myS2k.getPolygonsProperties(getPolygons);
+    //console.log("polygonsProperties", polygonsProperties);
+
+    const Xg: number = polygonsProperties.centroid?.X,
+      Yg: number = polygonsProperties.centroid?.Y;
+
+    for (const polygon of getPolygons) {
+      //console.log("polygon", polygon);
+
+      const { points }: { points?: Point2D[] } = polygon;
+      //console.log("points", points);
+      if (!points) continue;
+
+      // new shape
+      let shape: THREE.Shape = new THREE.Shape();
+
+      // moveTo first point
+      let { X, Y }: { X: number; Y: number } = points[0];
+
+      let X0: number = (-Xg + X) * scale.X;
+      let Y0: number = (-Yg + Y) * scale.Y;
+      //console.log("X0, Y0", X0, Y0);
+      shape.moveTo(X0, Y0);
+
+      // intermediate points
+      for (let p: number = 1; p < points.length; p++) {
+        const { X, Y }: { X: number; Y: number } = points[p];
+        //console.log("X, Y", (-Xg + X) * scale.X, (-Yg + Y) * scale.Y);
+        shape.lineTo((-Xg + X) * scale.X, (-Yg + Y) * scale.Y);
+      }
+
+      // last point = first point
+      shape.lineTo(X0, Y0);
+
+      // add shape
+      shapes.push(shape);
+    }
+  }
+  //console.log("shapes", shapes);
+
+  const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(shapes, {
+    // extrude settings
+    // https://stackoverflow.com/questions/25626171/threejs-extrudegeometry-depth-gives-different-result-than-extrudepath
+    //
+    //
+    //steps: 10,
+    depth: lengthExtrude,
+    bevelEnabled: false,
+    //bevelThickness: 1,
+    //bevelSize: 0,
+    //bevelOffset: 0,
+    //bevelSegments: 1,
+    //extrudePath: randomSpline,
+    //extrudePath: centroidalLine3,
+    //extrusionSegments: 10,
+  });
+
+  // centroid of frame ==> Gxyz
+  geometry.translate(0, 0, -lengthExtrude / 2);
+
+  // edges
+  const edges: THREE.EdgesGeometry = new THREE.EdgesGeometry(geometry);
+  let lines: THREE.LineSegments = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({
+      color: myTri.setColor(palette.value.black),
+    }),
+  );
+
+  // solids == mesh
+  const material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial({
+    color: extrudeColor,
+  });
+
+  material.transparent = true;
+  material.opacity = extrudeOpacity ? extrudeOpacity : 0.7; // 0.7
+  let mesh: THREE.Mesh = new THREE.Mesh(geometry, material);
+
+  // extrudeFrames
+  let extrude: THREE.Group = new THREE.Group();
+  extrude.add(mesh);
+  extrude.add(lines);
+  //
+  extrude.name = `Frame-${Frame}-Extrude`;
+  //extrude.visible = false;
+
+  // move to correct position
+  //
+  const qRad: number = (q * Math.PI) / 180;
+  const midpointV3: THREE.Vector3 = new THREE.Vector3()
+    .addVectors(startExtrude, endExtrude)
+    .multiplyScalar(0.5);
+
+  const z = directionExtrude.clone(); // In threejs the extrusion occurs in the Z axis.
+  let up = new THREE.Vector3(0, 1, 0); // Default for local UP horizontal members
+  const cross_vec = new THREE.Vector3().crossVectors(up, z);
+
+  if (cross_vec.length() === 0) up = new THREE.Vector3(1, 0, 0); // Local UP vertical members
+
+  const x = new THREE.Vector3().crossVectors(up, z).normalize();
+  const y = new THREE.Vector3().crossVectors(z, x).normalize();
+
+  const rotation = new THREE.Quaternion().setFromAxisAngle(z, qRad);
+
+  x.applyQuaternion(rotation);
+  y.applyQuaternion(rotation);
+
+  const m: THREE.Matrix4 = new THREE.Matrix4().makeBasis(x, y, z);
+  const qWorld: THREE.Quaternion = new THREE.Quaternion().setFromRotationMatrix(
+    m,
+  );
+  extrude.quaternion.copy(qWorld);
+
+  extrude.position.copy(midpointV3);
+
+  //
+  return { extrude: extrude };
 };
 
 // -------------
@@ -588,6 +950,15 @@ const _play = async (): Promise<void> => {
   //const elementsData: FRAGS.NewElementData[] = [];
 
   //
+  // scale
+  //
+  const scale: Point3D = {
+    X: options.value.scaleUnits[1],
+    Y: options.value.scaleUnits[1],
+    Z: options.value.scaleUnits[1],
+  };
+
+  //
   // Groups
   //
   console.olog("--- Groups ---");
@@ -596,10 +967,12 @@ const _play = async (): Promise<void> => {
 
     const group: THREE.Group | undefined = myTri.getGroup({
       name: Group,
-      visible: false,
+      //visible: false,
     });
-    //if (group) scene.add(group);
     if (group) world.scene.three.add(group);
+
+    // hide
+    setObjectVisible(Group, false);
   }
 
   //
@@ -625,6 +998,7 @@ const _play = async (): Promise<void> => {
       AxisDir: record.AxisDir,
       XRYZCoord: record.XRYZCoord,
       BubbleSize: BubbleSize,
+      scale: scale,
     });
 
     if (line && label) {
@@ -656,7 +1030,8 @@ const _play = async (): Promise<void> => {
     }: { point: THREE.Points | undefined; label: THREE.Sprite | undefined } =
       addJoint({
         Joint: record.Joint,
-        XYZ: { X: record.XorR, Y: record.Z, Z: record.Y },
+        XYZ: { X: record.XorR, Y: record.Z, Z: -record.Y },
+        scale: scale,
       });
     //if (point) scene.add(point);
     if (point) world.scene.three.add(point);
@@ -673,291 +1048,93 @@ const _play = async (): Promise<void> => {
   const ConnectivityFrame = data.value.hasOwnProperty("Frames")
     ? data.value["Frames"]
     : [];
+  const Sections = data.value.hasOwnProperty("Sections")
+    ? data.value["Sections"]
+    : [];
+  const Polygons = data.value.hasOwnProperty("Polygons")
+    ? data.value["Polygons"]
+    : [];
   for (let i = 0; i < ConnectivityFrame.length; i++) {
-    const { Frame, JointI, JointJ, Shape } = ConnectivityFrame[i];
+    const { Frame, JointI, JointJ, AnalSect } = ConnectivityFrame[i];
     console.olog(`Frame: ${Frame} > (${JointI}, ${JointJ})`);
 
+    //
+    // get joints
+    //
     const start = JointCoordinates.find((k: any) => k.Joint == JointI);
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
+    //
+    // get Offset
+    //
     const Offset: [number, number, number, number, number, number] = [
-      0, 0, 0, 0, 0, 0,
+      Frame.hasOwnProperty("JtOffsetXI") && !Frame.JtOffsetXI
+        ? Frame.JtOffsetXI
+        : 0,
+      Frame.hasOwnProperty("JtOffsetZI") && !Frame.JtOffsetZI
+        ? Frame.JtOffsetZI
+        : 0,
+      Frame.hasOwnProperty("JtOffsetYI") && !Frame.JtOffsetYI
+        ? -Frame.JtOffsetYI
+        : 0,
+      Frame.hasOwnProperty("JtOffsetXJ") && !Frame.JtOffsetXI
+        ? Frame.JtOffsetXJ
+        : 0,
+      Frame.hasOwnProperty("JtOffsetZJ") && !Frame.JtOffsetZJ
+        ? Frame.JtOffsetZJ
+        : 0,
+      Frame.hasOwnProperty("JtOffsetYJ") && !Frame.JtOffsetYJ
+        ? -Frame.JtOffsetYJ
+        : 0,
     ];
-
-    const vertex = [
-      { X: start.XorR, Y: start.Z, Z: start.Y },
-      { X: end.XorR, Y: end.Z, Z: end.Y },
-    ];
+    //console.log("Offset", Offset);
 
     //
-    // centroid
+    // get section, polygons
     //
-    const total: Point3D = vertex.reduce(
-      (acc, p) => {
-        return { X: acc.X + p.X, Y: acc.Y + p.Y, Z: acc.Z + p.Z };
-      },
-      { X: 0, Y: 0, Z: 0 },
-    );
-    const centroid: Point3D = {
-      X: total.X / vertex.length,
-      Y: total.Y / vertex.length,
-      Z: total.Z / vertex.length,
-    };
-    //console.log(centroid);
+    const section = Sections.find((k: any) => k.SectionName === AnalSect);
+    //console.log("section", section);
+    const polygons = Polygons.filter((k: any) => k.SectionName === AnalSect);
+    //console.log("polygons", polygons);
 
     //
-    // scale
+    // add
     //
-    const scale = {
-      X: options.value.scaleUnits[1],
-      Y: options.value.scaleUnits[1],
-      Z: options.value.scaleUnits[1],
-    };
-
-    const line: THREE.Line | undefined = myTri.getLine({
-      name: `Frame-${Frame}`,
-      vertex: vertex,
+    const { line, label, localAxes } = addFrame({
+      Frame,
+      start: { X: start.XorR, Y: start.Z, Z: -start.Y },
+      end: { X: end.XorR, Y: end.Z, Z: -end.Y },
       scale: scale,
-      color: Settings?.frames?.color,
     });
-    //if (line) scene.add(line);
+
     if (line) world.scene.three.add(line);
-
-    //
-    // midpoint + Offset
-    //
-    const midpoint: number[] = [
-      (start.XorR + Offset[0] + end.XorR + Offset[3]) / 2,
-      (start.Z + Offset[1] + end.Z + Offset[4]) / 2,
-      (start.Y + Offset[2] + end.Y + Offset[5]) / 2,
-    ].map((k: number) => k * options.value.scaleUnits[1]);
-    //console.log(midpoint);
-
-    //
-    // direction
-    //
-    const jI: THREE.Vector3 = new THREE.Vector3(
-      start.XorR * options.value.scaleUnits[1],
-      start.Z * options.value.scaleUnits[1],
-      start.Y * options.value.scaleUnits[1],
-    );
-    const jJ: THREE.Vector3 = new THREE.Vector3(
-      end.XorR * options.value.scaleUnits[1],
-      end.Z * options.value.scaleUnits[1],
-      end.Y * options.value.scaleUnits[1],
-    );
-    const direction: THREE.Vector3 = new THREE.Vector3().subVectors(jJ, jI);
-    //const length: number = direction.length();
-    const axisDirection = direction.normalize();
-
-    //
-    // add local AxesHelper
-    //
-    const localAxes: THREE.AxesHelper = new THREE.AxesHelper(0.5);
-
-    // Use quaternion to rotate localAxes from default to target orientation
-    const quaternion: THREE.Quaternion = new THREE.Quaternion();
-    const xAxis: THREE.Vector3 = new THREE.Vector3(1, 0, 0);
-    quaternion.setFromUnitVectors(xAxis, axisDirection);
-    localAxes.geometry.applyQuaternion(quaternion);
-
-    // translate to midpoint of frame
-    localAxes.geometry.translate(midpoint[0], midpoint[1], midpoint[2]);
-
-    // add name
-    localAxes.name = `Frame-${Frame}-LocalAxes`;
-
-    // add localAxes to group framesLocalAxes
-    const group = world.scene.three.getObjectByName("framesLocalAxes");
-    if (group) group.add(localAxes);
-
-    //
-    // add label
-    //
-    const label: THREE.Sprite | undefined = myTri.getLabel({
-      name: `Frame-${Frame}-Label`,
-      text: Frame,
-      vertex: centroid,
-      scale: scale,
-      color: Settings?.frames?.labelColor,
-    });
 
     if (label) {
       const group = world.scene.three.getObjectByName("framesLabels");
       if (group) group.add(label);
     }
 
-    //
-    // extrude / solid
-    //
+    if (localAxes) {
+      const group = world.scene.three.getObjectByName("framesLocalAxes");
+      if (group) group.add(localAxes);
+    }
 
     // extrude
     //
-
-    // direction to extrude
-    const startExtrude: THREE.Vector3 = new THREE.Vector3(
-      (start.XorR + Offset[0]) * options.value.scaleUnits[1],
-      (start.Z + Offset[1]) * options.value.scaleUnits[1],
-      (start.Y + Offset[2]) * options.value.scaleUnits[1],
-    );
-    const endExtrude: THREE.Vector3 = new THREE.Vector3(
-      (end.XorR + Offset[3]) * options.value.scaleUnits[1],
-      (end.Z + Offset[4]) * options.value.scaleUnits[1],
-      (end.Y + Offset[5]) * options.value.scaleUnits[1],
-    );
-    const directionExtrude: THREE.Vector3 = new THREE.Vector3().subVectors(
-      endExtrude,
-      startExtrude,
-    );
-    const lengthExtrude: number = directionExtrude.length();
-    const axisDirectionExtrude = directionExtrude.clone().normalize();
-
-    const Xg: number = centroid.X * options.value.scaleUnits[1],
-      Yg: number = centroid.Y * options.value.scaleUnits[1];
-
-    let shapes: THREE.Shape[] = [];
-
-    // cerchio 2D
-    const shape = new THREE.Shape();
-
-    const radius: number = 0.15,
-      slices: number = 18;
-    for (let i = 0; i < slices; i++) {
-      const alpha: number = (i * 2 * Math.PI) / slices,
-        ca: number = Math.cos(alpha),
-        sa: number = Math.sin(alpha);
-      //console.log(i, alpha, ca, sa);
-      i < 1
-        ? shape.moveTo(radius * ca, radius * sa)
-        : shape.lineTo(radius * ca, radius * sa); // P
-    }
-    shape.closePath();
-
-    /*
-    if (Shape === "SD Section") {
-      // 'SD Section' > polygons
-      //
-
-      if (!this.Polys) return;
-
-      // get ShapeNames list
-      let ShapeNames: string[] = [...this.Polys].map((p: any) => p.ShapeName);
-      ShapeNames = [...new Set(ShapeNames)]; // remove duplicates
-      //console.log("MyFrame > create > ShapeNames", this.AnalSect, ShapeNames);
-
-      for (const ShapeName of ShapeNames) {
-        const polys = [...this.Polys].filter(
-          (p: any) => p.ShapeName === ShapeName,
-        );
-        //console.log("MyFrame > create > polys", polys);
-
-        // new shape
-        let shape: THREE.Shape = new THREE.Shape();
-        //shape.moveTo(-Xg1, -Yg1);
-
-        // moveTo first point
-        let { X, Y }: { X: number; Y: number } = polys[0];
-        //console.log("MyFrame > create > X, Y", X, Y);
-
-        let X0: number = -Xg + X;
-        let Y0: number = -Yg + Y;
-        //console.log("MyFrame > create > X0, Y0", X0, Y0);
-        shape.moveTo(X0, Y0);
-
-        // intermediate points
-        for (let p: number = 1; p < polys.length; p++) {
-          //for (let p: number = polys.length - 1; p >= 0; p--) {
-          const { X, Y }: { X: number; Y: number } = polys[p];
-          //console.log("MyFrame > create > X, Y", X, Y);
-          shape.lineTo(-Xg + X, -Yg + Y);
-        }
-
-        // last == first point
-        shape.lineTo(X0, Y0);
-
-        // add shape
-        shapes.push(shape);
-      }
-    } else {
-      // not 'SD Section' > vertex
-      //
-      //console.log("MyFrame > create > vertex", this.AnalSect, this.vertex);
-      for (const vtx of this.Vertex) {
-        const { points }: { points: Point2D[] } = vtx;
-        //console.log("MyFrame > create > points", this.AnalSect, points);
-
-        // new shape
-        let shape: THREE.Shape = new THREE.Shape();
-
-        // moveTo first point
-        let { X, Y }: { X: number; Y: number } = points[0];
-
-        let X0: number = -Xg + X;
-        let Y0: number = -Yg + Y;
-        //console.log("MyFrame > create > X0, Y0", X0, Y0);
-        shape.moveTo(X0, Y0);
-
-        // intermediate points
-        for (let p: number = 1; p < points.length; p++) {
-          const { X, Y }: { X: number; Y: number } = points[p];
-          //console.log("MyFrame > create > X, Y", X, Y);
-          shape.lineTo(-Xg + X, -Yg + Y);
-        }
-
-        // last point = first point
-        shape.lineTo(X0, Y0);
-
-        // add shape
-        shapes.push(shape);
-      }
-    }
-    */
-    //console.log("MyFrame > create > shapes", shapes);
-
-    // estrusione
-    const extrudeSettings = {
-      depth: lengthExtrude,
-      bevelEnabled: false,
-    };
-
-    const geometry: THREE.ExtrudeGeometry = new THREE.ExtrudeGeometry(
-      shape,
-      extrudeSettings,
-    );
-
-    // asse Z locale
-    const zAxis = new THREE.Vector3(0, 0, 1);
-
-    // rotazione verso il target
-    const quaternionExtrude = new THREE.Quaternion().setFromUnitVectors(
-      zAxis,
-      axisDirectionExtrude,
-    );
-
-    geometry.applyQuaternion(quaternionExtrude);
-
-    // traslazione nello start point
-    geometry.translate(
-      start.XorR * options.value.scaleUnits[1],
-      start.Z * options.value.scaleUnits[1],
-      start.Y * options.value.scaleUnits[1],
-    );
-
-    // material
-    const material1: THREE.MeshStandardMaterial =
-      new THREE.MeshStandardMaterial({
-        color: Settings?.frames?.extrudeColor,
-      });
-
-    // solids == mesh
-    const material: THREE.MeshBasicMaterial = new THREE.MeshBasicMaterial({
-      color: Settings?.frames?.extrudeColor,
+    const { extrude } = addFrameExtrude({
+      Frame,
+      start: { X: start.XorR, Y: start.Z, Z: -start.Y },
+      end: { X: end.XorR, Y: end.Z, Z: -end.Y },
+      Offset: Offset,
+      section: section,
+      polygons: polygons,
+      scale: scale,
     });
 
-    // mesh
-    const mesh: THREE.Mesh = new THREE.Mesh(geometry, material);
-    // add
-    //world.scene.three.add(mesh);
+    if (extrude) {
+      const group = world.scene.three.getObjectByName("framesSolids");
+      if (group) group.add(extrude);
+    }
   }
 
   // Links
@@ -973,14 +1150,9 @@ const _play = async (): Promise<void> => {
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
     const vertex = [
-      { X: start.XorR, Y: start.Z, Z: start.Y },
-      { X: end.XorR, Y: end.Z, Z: end.Y },
+      { X: start.XorR, Y: start.Z, Z: -start.Y },
+      { X: end.XorR, Y: end.Z, Z: -end.Y },
     ];
-    const scale = {
-      X: options.value.scaleUnits[1],
-      Y: options.value.scaleUnits[1],
-      Z: options.value.scaleUnits[1],
-    };
 
     const line: THREE.Line | undefined = myTri.getLine({
       name: `Link-${Link}`,
@@ -988,10 +1160,8 @@ const _play = async (): Promise<void> => {
       scale: scale,
       color: Settings?.links?.color,
     });
-    //if (line) scene.add(line);
 
     if (line) {
-      //const group = scene.getObjectByName("links");
       const group = world.scene.three.getObjectByName("links");
       if (group) group.add(line);
     }
@@ -1007,14 +1177,8 @@ const _play = async (): Promise<void> => {
     console.olog(`Tendon: ${Tendon} > ${points.length - 1} segments`);
 
     const vertex: Point3D[] = points.map((i: Point3D) => {
-      return { X: i.X, Y: i.Z, Z: i.Y };
+      return { X: i.X, Y: i.Z, Z: -i.Y };
     });
-
-    const scale = {
-      X: options.value.scaleUnits[1],
-      Y: options.value.scaleUnits[1],
-      Z: options.value.scaleUnits[1],
-    };
 
     const line: THREE.Line | undefined = myTri.getLine({
       name: `Tendon-${Tendon}`,
@@ -1022,10 +1186,8 @@ const _play = async (): Promise<void> => {
       scale: scale,
       color: Settings?.tendons?.color,
     });
-    //if (line) scene.add(line);
 
     if (line) {
-      //const group = scene.getObjectByName("tendons");
       const group = world.scene.three.getObjectByName("tendons");
       if (group) group.add(line);
     }

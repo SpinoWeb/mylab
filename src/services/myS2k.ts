@@ -407,26 +407,27 @@ export const myS2k = {
       if (area < 0) {
         area *= -0.5;
 
-        cX /= -6.0 * area;
-        cY /= -6.0 * area;
-        ix_origin /= -12.0;
-        iy_origin /= -12.0;
-        ixy_origin /= -24.0;
+        cX /= -6 * area;
+        cY /= -6 * area;
+        ix_origin /= -12;
+        iy_origin /= -12;
+        ixy_origin /= -24;
       } else {
         area *= 0.5;
 
-        cX /= 6.0 * area;
-        cY /= 6.0 * area;
-        ix_origin /= 12.0;
-        iy_origin /= 12.0;
-        ixy_origin /= 24.0;
+        cX /= 6 * area;
+        cY /= 6 * area;
+        ix_origin /= 12;
+        iy_origin /= 12;
+        ixy_origin /= 24;
       }
+      //console.log(area);
 
       const ix: number = ix_origin - area * cY * cY;
       const iy: number = iy_origin - area * cX * cX;
       const ixy: number = ixy_origin - area * cX * cY;
-      const avg_i: number = (ix + iy) / 2.0;
-      const diff_i: number = (ix - iy) / 2.0;
+      const avg_i: number = (ix + iy) / 2;
+      const diff_i: number = (ix - iy) / 2;
       const R: number = Math.sqrt(diff_i * diff_i + ixy * ixy);
       const i1: number = avg_i + R;
       const i2: number = avg_i - R;
@@ -436,7 +437,7 @@ export const myS2k = {
       const ry: number = Math.sqrt(Math.abs(iy / area));
       // --- End Calculation Logic ---
 
-      //console.log("Retrofit > getPolygonProperties", cx, cy);
+      //console.log("getPolygonProperties", cx, cy);
 
       // limits
       const {
@@ -446,7 +447,7 @@ export const myS2k = {
         yMax,
       }: { xMin: number; xMax: number; yMin: number; yMax: number } =
         this.getPolygonLimits(points);
-      //console.log("Retrofit > getPolygonProperties", xMin, xMax, yMin, yMax );
+      //console.log("getPolygonProperties", xMin, xMax, yMin, yMax );
 
       return {
         centroid: { X: cX, Y: cY },
@@ -509,7 +510,7 @@ export const myS2k = {
         const props: any | undefined = this.getPolygonProperties(
           polygon.points,
         );
-        //console.log("getPolygonsProperties > props", props.centroid);
+        //console.log("props", props.area, props.centroid);
         if (props === undefined) continue;
 
         area += scale * props.hasOwnProperty("area") ? props.area : 0;
@@ -538,9 +539,10 @@ export const myS2k = {
         if (props.yMax > yMax) yMax = props.yMax;
       }
 
-      cX /= area;
-      cY /= area;
+      cX /= Math.abs(area) > 0 ? area : 1;
+      cY /= Math.abs(area) > 0 ? area : 1;
       centroid = { X: cX, Y: cY };
+      //console.log(polygons.length, centroid);
 
       return {
         area: area,
@@ -562,7 +564,7 @@ export const myS2k = {
       };
     } catch (err) {
       console.error("myS2k > getPolygonsProperties > err:", err);
-      return { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+      return { xMin: 0, xMax: 0, yMin: 0, yMax: 0, centroid: { X: 0, Y: 0 } };
     }
   },
 

@@ -1,128 +1,349 @@
 <template>
-  <div id="container" style="width: 40%; border: 1px solid black"></div>
-  <div style="width: 60%; height: 100%">
-    <div id="3dcontainer" style="width: 100%; height: 90%"></div>
-    <input type="button" id="runcode" value="Run Code" />
-    <input type="file" id="finput" />
-    <input type="button" id="cmem" value="Clear Memory" />
-    <input type="button" id="rcode" value="Reset Editor" />
-    Log Level:
-    <select id="logLevel">
-      <option value="6">Off</option>
-      <option value="4" selected>Error</option>
-      <option value="1">Debug</option>
-      <option value="3">Warn</option>
-    </select>
+  <div class="page">
+    <div ref="container" class="viewer"></div>
+
+    <button class="export-btn" @click="exportIFC">Export IFC</button>
   </div>
 </template>
 
 <script setup lang="ts">
-//import { ref, onMounted } from "vue";
+import { ref, onMounted } from "vue";
+import * as THREE from "three";
+import * as OBC from "@thatopen/components";
+import * as WEBIFC from "web-ifc";
 
-//const WebIFC = require("web-ifc/web-ifc-api.js");
-import * as WebIFC from "web-ifc";
+const container = ref<HTMLDivElement | null>(null);
 
-// initialize the API
-const IfcAPI = new WebIFC.IfcAPI();
+let ifcApi: WEBIFC.IfcAPI;
+let modelID = -1;
 
-// initialize the library
-await IfcAPI.Init();
+onMounted(async () => {
+  if (!container.value) return;
 
-// open a model from data
-const uint8: Uint8Array = new Uint8Array();
-let modelID: number = IfcAPI.OpenModel(
-  uint8 /* IFC data as a string or UInt8Array */,
-  /* optional settings object */
-);
+  //
+  // ==========================================
+  // VIEWER
+  // ==========================================
+  //
 
-// the model is now loaded! use modelID to fetch geometry or properties
-// checkout examples/usage for some details on how to read/write IFC
+  const components = new OBC.Components();
 
-interface pt {
-  x: number;
-  y: number;
-  z: number;
-}
+  const worlds = components.get(OBC.Worlds);
 
-const gridSize = 6;
+  const world = worlds.create<
+    OBC.SimpleScene,
+    OBC.SimpleCamera,
+    OBC.SimpleRenderer
+  >();
 
-let dir: pt = { x: 0, y: 0, z: 1 };
-let rad: number = 0.25;
-let len: number = 2;
-let direction = IfcAPI.CreateIfcEntity(modelID, WebIFC.IFCDIRECTION, [
-  IfcAPI.CreateIfcType(modelID, WebIFC.IFCREAL, dir.x),
-  IfcAPI.CreateIfcType(modelID, WebIFC.IFCREAL, dir.y),
-  IfcAPI.CreateIfcType(modelID, WebIFC.IFCREAL, dir.z),
-]);
-let profileLocation = IfcAPI.CreateIfcEntity(
-  modelID,
-  WebIFC.IFCCARTESIANPOINT,
-  [
-    IfcAPI.CreateIfcType(modelID, WebIFC.IFCLENGTHMEASURE, 0),
-    IfcAPI.CreateIfcType(modelID, WebIFC.IFCLENGTHMEASURE, 0),
-  ],
-);
-let profileAxis = IfcAPI.CreateIfcEntity(
-  modelID,
-  WebIFC.IFCAXIS2PLACEMENT2D,
-  profileLocation,
-  null,
-);
-let profile = IfcAPI.CreateIfcEntity(
-  modelID,
-  WebIFC.IFCCIRCLEPROFILEDEF,
-  WebIFC.IFC4.IfcProfileTypeEnum.AREA,
-  IfcAPI.CreateIfcType(modelID, WebIFC.IFCLABEL, "column-prefab"),
-  profileAxis,
-  IfcAPI.CreateIfcType(modelID, WebIFC.IFCPOSITIVELENGTHMEASURE, rad),
-);
+  world.scene = new OBC.SimpleScene(components);
 
-for (let i = 0; i < gridSize; i++) {
-  for (let j = 0; j < gridSize; j++) {
-    let pos: pt = { x: i, y: j, z: i + j };
+  world.renderer = new OBC.SimpleRenderer(components, container.value);
 
-    let location = IfcAPI.CreateIfcEntity(modelID, WebIFC.IFCCARTESIANPOINT, [
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCLENGTHMEASURE, pos.x),
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCLENGTHMEASURE, pos.y),
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCLENGTHMEASURE, pos.z),
-    ]);
-    let placement = IfcAPI.CreateIfcEntity(
-      modelID,
-      WebIFC.IFCAXIS2PLACEMENT3D,
-      location,
-      null,
-      null,
-    );
+  world.camera = new OBC.SimpleCamera(components);
 
-    let solid = IfcAPI.CreateIfcEntity(
-      modelID,
-      WebIFC.IFCEXTRUDEDAREASOLID,
-      profile,
-      placement,
-      direction,
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCPOSITIVELENGTHMEASURE, len),
-    );
+  components.init();
 
-    let column = IfcAPI.CreateIfcEntity(
-      modelID,
-      WebIFC.IFCCOLUMN,
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCGLOBALLYUNIQUEID, "GUID"),
-      null,
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCLABEL, "name"),
-      null,
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCLABEL, "label"),
-      placement,
-      solid,
-      IfcAPI.CreateIfcType(modelID, WebIFC.IFCIDENTIFIER, "sadf"),
-      null,
-    );
+  world.scene.setup();
 
-    IfcAPI.WriteLine(modelID, column);
-  }
-}
+  //
+  // CAMERA
+  //
 
-// close the model, all memory is freed
-IfcAPI.CloseModel(modelID);
+  world.camera.controls.setLookAt(10, 10, 10, 0, 2, 0);
+
+  //
+  // GRID
+  //
+
+  const grids = components.get(OBC.Grids);
+  grids.create(world);
+
+  //
+  // LIGHTS
+  //
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+
+  world.scene.three.add(ambient);
+
+  const directional = new THREE.DirectionalLight(0xffffff, 1);
+
+  directional.position.set(10, 20, 10);
+
+  world.scene.three.add(directional);
+
+  //
+  // ==========================================
+  // IFC API
+  // ==========================================
+  //
+
+  ifcApi = new WEBIFC.IfcAPI();
+
+  await ifcApi.Init();
+
+  modelID = ifcApi.CreateModel({
+    schema: "IFC4",
+  });
+
+  //
+  // ==========================================
+  // OWNER HISTORY
+  // ==========================================
+  //
+
+  const person = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCPERSON,
+    null,
+    null,
+    "Mario",
+    "Rossi",
+    null,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, person);
+
+  const organization = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCORGANIZATION,
+    null,
+    "MyCompany",
+    null,
+    null,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, organization);
+
+  const personOrg = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCPERSONANDORGANIZATION,
+    person,
+    organization,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, personOrg);
+
+  const application = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCAPPLICATION,
+    organization,
+    "1.0",
+    "Vue IFC Generator",
+    "VUEIFC",
+  );
+
+  ifcApi.WriteLine(modelID, application);
+
+  const ownerHistory = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCOWNERHISTORY,
+    personOrg,
+    application,
+    null,
+    "ADDED",
+    null,
+    personOrg,
+    application,
+    Math.floor(Date.now() / 1000),
+  );
+
+  ifcApi.WriteLine(modelID, ownerHistory);
+
+  //
+  // ==========================================
+  // PROJECT
+  // ==========================================
+  //
+
+  const project = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCPROJECT,
+    new WEBIFC.Handle(1),
+    ownerHistory,
+    "Vue IFC Project",
+    null,
+    null,
+    null,
+    [],
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, project);
+
+  //
+  // ==========================================
+  // MATERIAL
+  // ==========================================
+  //
+
+  const concreteMaterial = new THREE.MeshStandardMaterial({
+    color: "#bdbdbd",
+  });
+
+  //
+  // ==========================================
+  // COLUMN GEOMETRY
+  // ==========================================
+  //
+
+  const columnGeometry = new THREE.BoxGeometry(0.4, 4, 0.4);
+
+  //
+  // ==========================================
+  // COLUMN 1
+  // ==========================================
+  //
+
+  const column1 = new THREE.Mesh(columnGeometry, concreteMaterial);
+
+  column1.position.set(-2, 2, 0);
+
+  world.scene.three.add(column1);
+
+  const ifcColumn1 = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCCOLUMN,
+    new WEBIFC.Handle(100),
+    ownerHistory,
+    "Column-01",
+    null,
+    null,
+    null,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, ifcColumn1);
+
+  //
+  // ==========================================
+  // COLUMN 2
+  // ==========================================
+  //
+
+  const column2 = new THREE.Mesh(columnGeometry, concreteMaterial);
+
+  column2.position.set(2, 2, 0);
+
+  world.scene.three.add(column2);
+
+  const ifcColumn2 = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCCOLUMN,
+    new WEBIFC.Handle(101),
+    ownerHistory,
+    "Column-02",
+    null,
+    null,
+    null,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, ifcColumn2);
+
+  //
+  // ==========================================
+  // BEAM
+  // ==========================================
+  //
+
+  const beamGeometry = new THREE.BoxGeometry(4.4, 0.6, 0.4);
+
+  const beam = new THREE.Mesh(beamGeometry, concreteMaterial);
+
+  beam.position.set(0, 4, 0);
+
+  world.scene.three.add(beam);
+
+  const ifcBeam = ifcApi.CreateIfcEntity(
+    modelID,
+    WEBIFC.IFCBEAM,
+    new WEBIFC.Handle(102),
+    ownerHistory,
+    "Beam-01",
+    null,
+    null,
+    null,
+    null,
+  );
+
+  ifcApi.WriteLine(modelID, ifcBeam);
+});
+
+//
+// ==========================================
+// EXPORT IFC
+// ==========================================
+//
+
+const exportIFC = () => {
+  if (modelID === -1) return;
+
+  //
+  // Uint8Array IFC
+  //
+
+  const data = ifcApi.SaveModel(modelID);
+
+  //
+  // Blob download
+  //
+
+  const blob = new Blob([data], {
+    type: "application/octet-stream",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = "structure.ifc";
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+};
 </script>
 
-<style scoped></style>
+<style scoped>
+.page {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+}
+
+.viewer {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.export-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+
+  z-index: 10;
+
+  border: none;
+  border-radius: 8px;
+
+  padding: 12px 18px;
+
+  background: #1976d2;
+  color: white;
+
+  font-weight: bold;
+
+  cursor: pointer;
+}
+</style>

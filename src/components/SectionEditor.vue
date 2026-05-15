@@ -716,6 +716,7 @@ const quotes = computed(() => {
                     <InputText
                       v-model="section.SectionName"
                       style="width: 100%"
+                      :disabled="true"
                     />
                   </div>
                 </div>

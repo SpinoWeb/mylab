@@ -14,6 +14,7 @@ const tests = ref([
   { route: "/that-open", icon: "pi pi-apple", label: "ThatOpen" },
   { route: "/fragments", icon: "pi pi-android", label: "Fragments" },
   { route: "/ifc-lite", icon: "pi pi-amazon", label: "IfcLite" },
+  { route: "/stream", icon: "pi pi-box", label: "Stream" },
 ]);
 </script>
 

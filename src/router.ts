@@ -8,6 +8,7 @@ import Tri from "./components/Tri.vue";
 import ThatOpen from "./components/ThatOpen.vue";
 import Fragments from "./components/Fragments.vue";
 import IfcLite from "./components/IfcLite.vue";
+import Stream from "./components/Stream.vue";
 
 const routes: any[] = [
   { name: "home", path: "/", component: Home },
@@ -18,6 +19,7 @@ const routes: any[] = [
   { name: "that-open", path: "/that-open", component: ThatOpen },
   { name: "fragments", path: "/fragments", component: Fragments },
   { name: "ifc-lite", path: "/ifc-lite", component: IfcLite },
+  { name: "stream", path: "/stream", component: Stream },
 ];
 
 const router: any = createRouter({
