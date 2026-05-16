@@ -10,20 +10,32 @@
           class="w-3/4"
           @change="resetData"
         />
-        <Button label="get" @click="getData" :disabled="!myFile || isLoading" />
+        <Button
+          label="get"
+          @click="streamData"
+          :disabled="!myFile || isLoading"
+        />
       </div>
 
-      <div>{{ rows }} x {{ cols }} = {{ rows * cols }}</div>
+      <div class="flex flex-row gap-2 justify-end">
+        <div>n</div>
+        <Button label="random" @click="getRandomData()" :disabled="isLoading" />
+      </div>
+
+      <div class="flex flex-row gap-2 justify-end">
+        <div>{{ rows }} x {{ cols }} = {{ rows * cols }}</div>
+        <Button label="reset" @click="resetData" :disabled="isLoading" />
+      </div>
 
       <div class="flex flex-row gap-2">
         <Select
-          v-model="colX"
+          v-model.number="colX"
           :options="listOfCols"
           placeholder="X"
           class="w-1/2"
         />
         <Select
-          v-model="colY"
+          v-model.number="colY"
           :options="listOfCols"
           placeholder="Y"
           class="w-1/2"
@@ -32,18 +44,34 @@
 
       <div class="flex flex-row gap-2">
         <Select
-          v-model="rowFrom"
+          v-model.number="rowFrom"
           :options="listOfRows"
           placeholder="from"
           class="w-1/2"
         />
         <Select
-          v-model="rowTo"
+          v-model.number="rowTo"
           :options="listOfRows"
           placeholder="to"
           class="w-1/2"
         />
       </div>
+
+      <Button
+        label="query"
+        @click="queryData"
+        :disabled="
+          !myFile ||
+          isLoading ||
+          rowFrom == undefined ||
+          rowTo == undefined ||
+          colX == undefined ||
+          colY == undefined
+        "
+      />
+
+      <div>{{ colX }} : {{ colY }}</div>
+      <div>{{ rowFrom }} : {{ rowTo }}</div>
     </div>
 
     <div class="flex flex-col gap-2 w-5/6 border-1">
@@ -59,13 +87,23 @@
           <thead>
             <tr>
               <th>#</th>
-              <th v-for="c in cols">{{ c - 1 }}</th>
+              <th
+                v-for="c in cols"
+                :class="c - 1 == colX || c - 1 == colY ? 'hl' : null"
+              >
+                {{ c - 1 }}
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(row, rdex) in myData">
               <td>{{ rdex }}</td>
-              <td v-for="col in row">{{ col.toFixed(3) }}</td>
+              <td
+                v-for="(col, cdex) in row"
+                :class="cdex == colX || cdex == colY ? 'hl' : null"
+              >
+                {{ col.toFixed(3) }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -77,13 +115,16 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 
+//import Highcharts from "highcharts";
 import { Chart } from "highcharts-vue";
+//import "highcharts/modules/boost";
 
 import { inject } from "vue";
 const darkMode = inject("darkMode");
 
 const myFiles = ref([
   { name: "data_500_5", code: "data_500_5" },
+  { name: "data_1500_5", code: "data_1500_5" },
   { name: "data_10000_10", code: "data_10000_10" },
   { name: "data_50000_5", code: "data_50000_5" },
   { name: "data_100000_10", code: "data_100000_10" },
@@ -92,6 +133,7 @@ const myFile = ref(myFiles.value[0]);
 const isLoading = ref<boolean>(false);
 
 const myData = ref<any[]>([]);
+const series = ref<any[]>([]);
 
 const rows = computed((): number => myData.value.length);
 const cols = computed((): number =>
@@ -107,8 +149,8 @@ const rowTo = ref<number | undefined>();
 const listOfRows = computed(() => Array.from(Array(rows.value), (x, i) => i));
 
 // https://medium.com/@AlexanderObregon/parsing-large-files-in-the-browser-using-javascript-streams-api-78cb88f30d23
-const getData = async () => {
-  console.log("getData");
+const streamData = async () => {
+  console.log("streamData");
 
   isLoading.value = true;
 
@@ -156,6 +198,11 @@ const getData = async () => {
     myData.value.push(cols);
   }
 
+  // init
+  rowFrom.value = 0;
+  rowTo.value = rows.value - 1;
+
+  //
   console.log("--- file completato ---");
   isLoading.value = false;
 };
@@ -168,7 +215,10 @@ function parseLine(line: string) {
     .filter(Boolean);
 }
 
-function getRandomData(n: number) {
+// ----------------------
+// getRandomData
+// ----------------------
+const _getRandomData = async (n: number): Promise<number[][]> => {
   const arr = [];
   let i,
     x,
@@ -176,6 +226,7 @@ function getRandomData(n: number) {
     b: number = 1,
     c: number = 1,
     spike;
+
   for (
     i = 0, x = Date.UTC(new Date().getUTCFullYear(), 0, 1) - n * 36e5;
     i < n;
@@ -195,12 +246,32 @@ function getRandomData(n: number) {
     } else {
       spike = 0;
     }
-    arr.push([x, 2 * Math.sin(i / 100) + a + b + c + spike + Math.random()]);
+    arr.push([
+      x,
+      2 * Math.sin(i / 100) + a + b + c + spike + Math.random(),
+      2 * Math.cos(i / 100) + a + b + c + spike + Math.random(),
+    ]);
   }
-  return arr;
-}
-//const n = 500000, data = getData(n);
 
+  //
+  return Promise.resolve(arr);
+};
+const getRandomData = async (n: number = 100000) => {
+  isLoading.value = true;
+
+  myData.value = await _getRandomData(n);
+
+  // init
+  rowFrom.value = 0;
+  rowTo.value = rows.value - 1;
+
+  isLoading.value = false;
+};
+//const n = 500000, data = getRandomData(n);
+
+// ----------------------
+// resetData
+// ----------------------
 const resetData = () => {
   myData.value = [];
 
@@ -209,29 +280,80 @@ const resetData = () => {
 
   colX.value = 0;
   colY.value = undefined;
+
+  series.value = [];
 };
 
-const chartOptions = computed(() => {
-  let data: [number, number][] = [];
-  if (
-    rowFrom.value !== undefined &&
-    rowTo.value !== undefined &&
-    colX.value !== undefined &&
-    colY.value !== undefined
-  ) {
-    for (let i = rowFrom.value; i < rowTo.value; i++) {
-      data.push([myData.value[i][colX.value], myData.value[i][colY.value]]);
-    }
+// ----------------------
+// queryData
+// ----------------------
+const getCol = (matrix: any[], col: number) => {
+  let column = [];
+  for (let i = 0; i < matrix.length; i++) {
+    column.push(matrix[i][col]);
   }
-  //console.log(data[0]);
+  return column;
+};
+const _getCols = (): [number, number][] => {
+  if (colX.value === undefined || colY.value === undefined) return [];
 
+  return myData.value.map((x, i: number) => [
+    myData.value[i][colX.value ? colX.value : 0], // Get X column
+    myData.value[i][colY.value ? colY.value : 0], // Get Y column
+  ]);
+};
+const _getQuery = async (): Promise<[number, number][]> => {
+  if (rowFrom.value === undefined || rowTo.value === undefined) return [];
+
+  return Promise.resolve(
+    _getCols().slice(
+      rowFrom.value ? rowFrom.value : 0,
+      rowTo.value ? rowTo.value : 0,
+    ),
+  );
+};
+const queryData = async () => {
+  isLoading.value = true;
+  series.value = [];
+
+  if (
+    rowFrom.value === undefined ||
+    rowTo.value === undefined ||
+    colX.value === undefined ||
+    colY.value === undefined
+  )
+    return;
+
+  // query
+  const data: [number, number][] = await _getQuery();
+  //console.log(data);
+
+  // series
+  series.value = [
+    {
+      data: data
+        .map((i) => Object.assign({}, { x: i[0], y: i[1] }))
+        .sort((a, b) => a.x - b.x),
+      lineWidth: 0.1,
+      name: myFile.value.name,
+      color: "#ff7b72",
+    },
+  ];
+
+  isLoading.value = false;
+};
+
+// ----------------------
+// chartOptions
+// ----------------------
+const chartOptions = computed(() => {
   // legend
   const legend: any = {
     enabled: true,
     layout: "vertical",
-    align: "right",
+    align: "left",
     verticalAlign: "top",
-    x: -20,
+    x: 50,
     y: 0,
     floating: true,
   };
@@ -239,17 +361,18 @@ const chartOptions = computed(() => {
   return {
     chart: {
       type: "line",
-      styledMode: true,
+      //styledMode: true,
+      zooming: { type: "x" },
     },
-    //credits: {      enabled: false    },
+    credits: { enabled: false },
 
     title: {
       //text: "points",
       text: undefined,
     },
     subtitle: {
-      text: `${data.length} points`,
-      //text: undefined,
+      //text: `${data.length} points`,
+      text: undefined,
     },
 
     tooltip: {
@@ -260,16 +383,7 @@ const chartOptions = computed(() => {
     yAxis: { title: { text: "y" } },
 
     legend: legend,
-    series: [
-      {
-        data: data
-          .map((i) => Object.assign({}, { x: i[0], y: i[1] }))
-          .sort((a, b) => a.x - b.x),
-        lineWidth: 0.1,
-        name: myFile.value.name,
-        color: "#FF0",
-      },
-    ],
+    series: series.value,
   };
 });
 </script>
@@ -419,11 +533,19 @@ th {
   letter-spacing: 0.05em;
   border-bottom: 1px solid;
 }
+th.hl {
+  font-weight: bold;
+  background-color: #ff7b72;
+}
 td {
   padding: 0.55rem 1rem;
   border-bottom: 0px solid;
   font-family: "IBM Plex Mono", monospace;
   white-space: nowrap;
+}
+td.hl {
+  font-weight: bold;
+  background-color: #696;
 }
 tr:last-child td {
   border-bottom: none;

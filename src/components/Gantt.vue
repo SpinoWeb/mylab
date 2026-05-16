@@ -25,7 +25,6 @@ import VueJsonPretty from "vue-json-pretty";
 import "vue-json-pretty/lib/styles.css";
 
 import Highcharts from "highcharts";
-
 import { Chart } from "highcharts-vue";
 import "highcharts/modules/gantt";
 import "highcharts/modules/draggable-points";
