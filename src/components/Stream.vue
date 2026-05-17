@@ -27,21 +27,7 @@
         <Button label="reset" @click="resetData" :disabled="isLoading" />
       </div>
 
-      <div class="flex flex-row gap-2">
-        <Select
-          v-model.number="colX"
-          :options="listOfCols"
-          placeholder="X"
-          class="w-1/2"
-        />
-        <Select
-          v-model.number="colY"
-          :options="listOfCols"
-          placeholder="Y"
-          class="w-1/2"
-        />
-      </div>
-
+      <!-- from, to-->
       <div class="flex flex-row gap-2">
         <Select
           v-model.number="rowFrom"
@@ -57,6 +43,36 @@
         />
       </div>
 
+      <!-- axes -->
+      <div class="flex flex-col gap-2">
+        <div class="flex flex-row gap-2">
+          <label class="mt-2">X</label>
+          <Select
+            v-model.number="colX"
+            :options="listOfCols"
+            placeholder="X"
+            class="w-1/2"
+          />
+        </div>
+
+        <div v-for="(i, ydex) in colYlist" class="flex flex-row gap-2">
+          <label class="mt-2">Y</label>
+          <Select
+            v-model.number="colYlist[ydex]"
+            :options="listOfCols"
+            placeholder="Y"
+            class="w-1/2"
+          />
+          <Button label="+" @click="addColY" :disabled="!myFile || isLoading" />
+          <Button
+            label="x"
+            @click="delColY(ydex)"
+            :disabled="!myFile || isLoading || colYlist.length < 2"
+          />
+        </div>
+      </div>
+
+      <!-- query -->
       <Button
         label="query"
         @click="queryData"
@@ -66,12 +82,12 @@
           rowFrom == undefined ||
           rowTo == undefined ||
           colX == undefined ||
-          colY == undefined
+          colYlist.length < 1
         "
       />
 
-      <div>{{ colX }} : {{ colY }}</div>
       <div>{{ rowFrom }} : {{ rowTo }}</div>
+      <div>{{ colX }} : {{ colYlist }}</div>
     </div>
 
     <div class="flex flex-col gap-2 w-5/6 border-1">
@@ -89,7 +105,7 @@
               <th>#</th>
               <th
                 v-for="c in cols"
-                :class="c - 1 == colX || c - 1 == colY ? 'hl' : null"
+                :class="c - 1 == colX || colYlist.includes(c - 1) ? 'hl' : null"
               >
                 {{ c - 1 }}
               </th>
@@ -100,7 +116,14 @@
               <td>{{ rdex }}</td>
               <td
                 v-for="(col, cdex) in row"
-                :class="cdex == colX || cdex == colY ? 'hl' : null"
+                :class="
+                  cdex == colX ||
+                  colYlist.includes(
+                    typeof cdex === 'string' ? parseInt(cdex) : cdex,
+                  )
+                    ? 'hl'
+                    : null
+                "
               >
                 {{ col.toFixed(3) }}
               </td>
@@ -119,6 +142,8 @@ import { ref, computed } from "vue";
 import { Chart } from "highcharts-vue";
 //import "highcharts/modules/boost";
 
+import { myUtils } from "../services/myUtils";
+
 import { inject } from "vue";
 const darkMode = inject("darkMode");
 
@@ -126,6 +151,7 @@ const myFiles = ref([
   { name: "data_500_5", code: "data_500_5" },
   { name: "data_1500_5", code: "data_1500_5" },
   { name: "data_10000_10", code: "data_10000_10" },
+  { name: "data_20000_10", code: "data_20000_10" },
   { name: "data_50000_5", code: "data_50000_5" },
   { name: "data_100000_10", code: "data_100000_10" },
 ]);
@@ -142,6 +168,7 @@ const cols = computed((): number =>
 
 const colX = ref<number | undefined>();
 const colY = ref<number | undefined>();
+const colYlist = ref<number[]>([0]);
 const listOfCols = computed(() => Array.from(Array(cols.value), (x, i) => i));
 
 const rowFrom = ref<number | undefined>();
@@ -294,19 +321,19 @@ const getCol = (matrix: any[], col: number) => {
   }
   return column;
 };
-const _getCols = (): [number, number][] => {
-  if (colX.value === undefined || colY.value === undefined) return [];
+const _getCols = (colY: number = 0): [number, number][] => {
+  if (colX.value === undefined) return [];
 
   return myData.value.map((x, i: number) => [
     myData.value[i][colX.value ? colX.value : 0], // Get X column
-    myData.value[i][colY.value ? colY.value : 0], // Get Y column
+    myData.value[i][colY ? colY : 0], // Get Y column
   ]);
 };
-const _getQuery = async (): Promise<[number, number][]> => {
+const _getQuery = async (colY: number = 0): Promise<[number, number][]> => {
   if (rowFrom.value === undefined || rowTo.value === undefined) return [];
 
   return Promise.resolve(
-    _getCols().slice(
+    _getCols(colY).slice(
       rowFrom.value ? rowFrom.value : 0,
       rowTo.value ? rowTo.value : 0,
     ),
@@ -319,28 +346,38 @@ const queryData = async () => {
   if (
     rowFrom.value === undefined ||
     rowTo.value === undefined ||
-    colX.value === undefined ||
-    colY.value === undefined
+    colX.value === undefined
   )
     return;
 
   // query
-  const data: [number, number][] = await _getQuery();
-  //console.log(data);
+  for (let i = 0; i < colYlist.value.length; i++) {
+    const colY = colYlist.value[i];
 
-  // series
-  series.value = [
-    {
+    const data: [number, number][] = await _getQuery(colY);
+    //console.log(data);
+
+    series.value.push({
       data: data
         .map((i) => Object.assign({}, { x: i[0], y: i[1] }))
         .sort((a, b) => a.x - b.x),
       lineWidth: 0.1,
       name: myFile.value.name,
-      color: "#ff7b72",
-    },
-  ];
+      color: myUtils.randomHexColor(),
+    });
+  }
 
   isLoading.value = false;
+};
+
+// ----------------------
+// colY
+// ----------------------
+const addColY = () => {
+  colYlist.value.push(0);
+};
+const delColY = (index: number) => {
+  colYlist.value.splice(index, 1);
 };
 
 // ----------------------
@@ -362,7 +399,7 @@ const chartOptions = computed(() => {
     chart: {
       type: "line",
       //styledMode: true,
-      zooming: { type: "x" },
+      zooming: { type: "x" }, // Valid values: 'x', 'y', 'xy', null
     },
     credits: { enabled: false },
 
@@ -381,6 +418,8 @@ const chartOptions = computed(() => {
 
     xAxis: { title: { text: "x" } },
     yAxis: { title: { text: "y" } },
+
+    scrollbar: { enabled: true },
 
     legend: legend,
     series: series.value,
