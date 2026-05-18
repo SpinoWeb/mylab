@@ -4,6 +4,59 @@ import { myUtils } from "./myUtils";
 
 import { Point2D, Section, Material, Polygon } from "./Types";
 
+type Punto = {
+  X: number;
+  Y: number;
+};
+type MomentiInerzia = {
+  // Rispetto all'origine del sistema di riferimento
+  origine: {
+    Ix: number;
+    Iy: number;
+    Ixy: number;
+    J: number; // momento polare
+  };
+
+  // Rispetto al baricentro
+  baricentro: {
+    Ix: number;
+    Iy: number;
+    Ixy: number;
+    J: number; // momento polare
+  };
+};
+type ProprietaPoligono = {
+  area: number;
+  perimetro: number;
+  centroide: Punto;
+  boundingBox: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  };
+  numeroVertici: number;
+  orientamento: "antiorario" | "orario";
+  inerzia: MomentiInerzia;
+
+  //
+  //
+  //
+  centroid: Punto;
+  //area: area,
+  ix_origin: number;
+  iy_origin: number;
+  ixy_origin: number;
+  ix: number;
+  iy: number;
+  ixy: number;
+  // limits
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+};
+
 // S2k
 export const myS2k = {
   /**
@@ -37,7 +90,30 @@ export const myS2k = {
    * [svg coordinates' system]
    *
    */
+  // [s2k coordinates' system]
   getSDSectionPolygons({
+    Section,
+    Polygons,
+    //Materials,
+  }: {
+    Section: Section;
+    Polygons: Polygon[];
+    //Materials: Material[];
+  }) {
+    //console.log("myS2k > getSDSectionPolygons", Section, Materials, Polygons);
+    if (!Section) return [];
+    //if (Materials.length < 1) return [];
+    if (Polygons.length < 1) return [];
+
+    const s2kPolygons: Polygon[] = Polygons.filter(
+      (p: Polygon) => p.SectionName === Section.SectionName,
+    );
+    //console.log("myS2k > getSDSectionPolygons > s2kPolygons", s2kPolygons);
+
+    return s2kPolygons;
+  },
+  // [svg coordinates' system]
+  getSDSectionPolygonsSvg({
     Section,
     Polygons,
     //Materials,
@@ -59,9 +135,11 @@ export const myS2k = {
     if (!X0) X0 = 0;
     if (!Y0) Y0 = 0;
 
-    const s2kPolygons: Polygon[] = Polygons.filter(
-      (p: Polygon) => p.SectionName === Section.SectionName,
-    );
+    // get s2k polygons
+    const s2kPolygons: Polygon[] = this.getSDSectionPolygons({
+      Section,
+      Polygons,
+    });
     //console.log("myS2k > getSDSectionPolygons > s2kPolygons", s2kPolygons);
 
     // get yMax
@@ -78,7 +156,7 @@ export const myS2k = {
       const svgPolygon: Polygon = myUtils.deepClone(polygon);
 
       const points = svgPolygon.points?.map((p: Point2D) => {
-        return { X: X0 + p.X, Y: Y0 + (yMax - p.Y) };
+        return { X: X0 + p.X, Y: Y0 + yMax - p.Y };
       });
       //console.log("myS2k > getSDSectionPolygons > svgPolygon", svgPolygon);
 
@@ -91,18 +169,10 @@ export const myS2k = {
 
   /**
    * Generate cross-section points of polygons from s2k variables
-   * [svg coordinates' system]
    *
    */
-  getPolygons({
-    section,
-    X0,
-    Y0,
-  }: {
-    section: Section;
-    X0?: number;
-    Y0?: number;
-  }) {
+  // [s2k coordinates' system]
+  getPolygons({ section }: { section: Section }) {
     //console.log("getPolygons", section);
     if (!section) return [];
 
@@ -139,104 +209,95 @@ export const myS2k = {
     if (!tfb) tfb = 0.1;
     if (!FilletRadius) FilletRadius = 0;
 
-    // origin
-    if (!X0) X0 = 0;
-    if (!Y0) Y0 = 0;
-
     // counter-clockwise
     let polygons: any[] = [];
 
     if (Shape === "Rectangular") {
+      // counter-clockwise order
       let points: Point2D[] = [];
 
-      points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + t3 });
-      points.push({ X: X0 + t2, Y: Y0 + t3 });
-      points.push({ X: X0 + t2, Y: Y0 });
+      points.push({ X: 0, Y: 0 });
+      points.push({ X: t2, Y: 0 });
+      points.push({ X: t2, Y: t3 });
+      points.push({ X: 0, Y: t3 });
 
-      //console.log("S2k > getPolygons", points);
+      //console.log("myS2k > getPolygons", points);
       polygons.push({ points: points });
     }
 
     if (Shape === "Tee") {
-      //const hw: number = t3 - tf;
+      // counter-clockwise order
       let points: Point2D[] = [];
 
-      points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + tf });
-      points.push({ X: X0 + (t2 - tw) / 2 - FilletRadius, Y: Y0 + tf });
+      points.push({ X: 0, Y: t3 }); // A
+      points.push({ X: 0, Y: t3 - tf }); // B
+      points.push({ X: (t2 - tw) / 2 - FilletRadius, Y: t3 - tf }); // C
       if (FilletRadius > 0)
-        points.push({ X: X0 + (t2 - tw) / 2, Y: Y0 + tf + FilletRadius });
-      points.push({ X: X0 + (t2 - tw) / 2, Y: Y0 + t3 });
-      points.push({ X: X0 + (t2 + tw) / 2, Y: Y0 + t3 });
+        points.push({ X: (t2 - tw) / 2, Y: t3 - tf - FilletRadius }); // D
+      points.push({ X: (t2 - tw) / 2, Y: 0 }); // E
+      points.push({ X: (t2 + tw) / 2, Y: 0 }); // F
       if (FilletRadius > 0)
-        points.push({ X: X0 + (t2 + tw) / 2, Y: Y0 + tf + FilletRadius });
-      points.push({ X: X0 + (t2 + tw) / 2 + FilletRadius, Y: Y0 + tf });
-      points.push({ X: X0 + t2, Y: Y0 + tf });
-      points.push({ X: X0 + t2, Y: Y0 });
+        points.push({ X: (t2 + tw) / 2, Y: t3 - tf - FilletRadius }); // G
+      points.push({ X: (t2 + tw) / 2 + FilletRadius, Y: t3 - tf }); // H
+      points.push({ X: t2, Y: t3 - tf }); // I
+      points.push({ X: t2, Y: t3 }); // J
 
       //console.log("S2k > getPolygons", points);
       polygons.push({ points: points });
     }
 
     if (Shape === "I/Wide Flange") {
-      //const hw: number = t3 - (tf + tfb);
+      // counter-clockwise order
       let points: Point2D[] = [];
 
-      points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + tf });
-      points.push({ X: X0 + (t2 - tw) / 2 - FilletRadius, Y: Y0 + tf });
+      points.push({ X: 0, Y: t3 }); // A
+      points.push({ X: 0, Y: t3 - tf }); // B
+      points.push({ X: (t2 - tw) / 2 - FilletRadius, Y: t3 - tf }); // C
       if (FilletRadius > 0)
-        points.push({ X: X0 + (t2 - tw) / 2, Y: Y0 + tf + FilletRadius });
-
-      points.push({
-        X: X0 + (t2 - tw) / 2,
-        Y: Y0 + t3 - tfb - FilletRadius,
-      });
+        points.push({ X: (t2 - tw) / 2, Y: t3 - tf - FilletRadius }); // D
+      points.push({ X: (t2 - tw) / 2, Y: tfb + FilletRadius }); // E
       if (FilletRadius > 0)
-        points.push({
-          X: X0 + (t2 - tw) / 2 - FilletRadius,
-          Y: Y0 + t3 - tfb,
-        });
-      points.push({ X: X0 + (t2 - tw) / 2 - (t2b - tw) / 2, Y: Y0 + t3 - tfb });
-      points.push({ X: X0 + (t2 - tw) / 2 - (t2b - tw) / 2, Y: Y0 + t3 });
-      points.push({ X: X0 + (t2 - tw) / 2 + (t2b + tw) / 2, Y: Y0 + t3 }); // 6
-      points.push({ X: X0 + (t2 - tw) / 2 + (t2b + tw) / 2, Y: Y0 + t3 - tfb }); // 7
-
-      points.push({ X: X0 + (t2 + tw) / 2 + FilletRadius, Y: Y0 + t3 - tfb });
+        points.push({ X: (t2 - tw) / 2 - FilletRadius, Y: tfb }); // F
+      points.push({ X: (t2 - tw) / 2 - (t2b - tw) / 2, Y: tfb }); // G
+      points.push({ X: (t2 - tw) / 2 - (t2b - tw) / 2, Y: 0 }); // H
+      points.push({ X: (t2 - tw) / 2 + (t2b + tw) / 2, Y: 0 }); // I
+      points.push({ X: (t2 - tw) / 2 + (t2b + tw) / 2, Y: tfb }); // J
+      points.push({ X: (t2 + tw) / 2 + FilletRadius, Y: tfb }); // K
       if (FilletRadius > 0)
-        points.push({ X: X0 + (t2 + tw) / 2, Y: Y0 + t3 - tfb - FilletRadius });
-      points.push({ X: X0 + (t2 + tw) / 2, Y: Y0 + tf + FilletRadius });
+        points.push({ X: (t2 + tw) / 2, Y: tfb + FilletRadius }); // L
+      points.push({ X: (t2 + tw) / 2, Y: t3 - tf - FilletRadius }); // M
       if (FilletRadius > 0)
-        points.push({ X: X0 + (t2 + tw) / 2 + FilletRadius, Y: Y0 + tf });
-      points.push({ X: X0 + t2, Y: Y0 + tf });
-      points.push({ X: X0 + t2, Y: Y0 });
+        points.push({ X: (t2 + tw) / 2 + FilletRadius, Y: t3 - tf }); // N
+      points.push({ X: t2, Y: t3 - tf }); // O
+      points.push({ X: t2, Y: t3 }); // P
 
       //console.log("S2k > getPolygons", points);
       polygons.push({ points: points });
     }
 
     if (Shape === "Box/Tube") {
-      //const hw: number = t3 - 2 * tf;
+      // counter-clockwise order
       let points: Point2D[] = [];
 
-      points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + t3 });
-      points.push({ X: X0 + t2, Y: Y0 + t3 });
-      points.push({ X: X0 + t2, Y: Y0 });
+      points.push({ X: 0, Y: t3 }); // A
+      points.push({ X: 0, Y: 0 }); // B
+      points.push({ X: t2, Y: 0 }); // C
+      points.push({ X: t2, Y: t3 }); // D
 
       polygons.push({ points: points });
 
+      // clockwise order
       points = []; // void
-      points.push({ X: X0 + tw, Y: Y0 + tf });
-      points.push({ X: X0 + tw, Y: Y0 + t3 - tf });
-      points.push({ X: X0 + t2 - tw, Y: Y0 + t3 - tf });
-      points.push({ X: X0 + t2 - tw, Y: Y0 + tf });
+      points.push({ X: tw, Y: t3 - tf }); // E
+      points.push({ X: tw, Y: tf }); // F
+      points.push({ X: t2 - tw, Y: tf }); // G
+      points.push({ X: t2 - tw, Y: t3 - tf }); // H
 
-      polygons.push({ points: points, fill: "#FFF", scale: 0 });
+      polygons.push({ points: points, scale: 0, fill: "#FFF" });
     }
 
     if (Shape === "Circle") {
+      // counter-clockwise order
       let points: Point2D[] = [];
 
       const Radius: number = t3 / 2;
@@ -245,43 +306,43 @@ export const myS2k = {
         const s: number = Math.sin((q * Math.PI) / 180);
         const c: number = Math.cos((q * Math.PI) / 180);
 
-        points.push({ X: X0 + Radius * (1 + c), Y: Y0 + Radius * (1 + s) });
+        points.push({ X: Radius * (1 + c), Y: Radius * (1 + s) });
       }
 
       polygons.push({ points: points });
     }
 
     if (Shape === "Pipe") {
-      let points: Point2D[] = [];
-
       const Radius3: number = t3 / 2;
       const Radius2: number = t3 / 2 - tw;
 
-      // counter-clockwise
+      // counter-clockwise order
+      let points: Point2D[] = [];
+
       for (let q = 0; q < 360; q++) {
         const s: number = Math.sin((q * Math.PI) / 180);
         const c: number = Math.cos((q * Math.PI) / 180);
 
         points.push({
-          X: X0 + Radius3 + Radius3 * c,
-          Y: Y0 + Radius3 + Radius3 * s,
+          X: Radius3 + Radius3 * c,
+          Y: Radius3 + Radius3 * s,
         });
       }
       polygons.push({ points: points });
 
+      // clockwise order
       points = [];
 
-      // clockwise
       for (let q = 360; q > 0; q--) {
         const s: number = Math.sin((q * Math.PI) / 180);
         const c: number = Math.cos((q * Math.PI) / 180);
 
         points.push({
-          X: X0 + Radius3 + Radius2 * c,
-          Y: Y0 + Radius3 + Radius2 * s,
+          X: Radius3 + Radius2 * c,
+          Y: Radius3 + Radius2 * s,
         });
       }
-      polygons.push({ points: points, fill: "#FFF", scale: 0 });
+      polygons.push({ points: points, scale: 0, fill: "#FFF" });
     }
 
     if (Shape === "PC Conc I Girder") {
@@ -314,27 +375,71 @@ export const myS2k = {
       if (!D5) D5 = 300;
       if (!D6) D6 = 300;
 
-      //const Dw: number = D1 - (D2 + D3 + D5 + D6);
+      // counter-clockwise order
       let points: Point2D[] = [];
 
-      points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + D2 });
-      points.push({ X: X0 + (B1 - T1) / 2, Y: Y0 + D2 + D3 });
-      points.push({ X: X0 + (B1 - T1) / 2, Y: Y0 + D1 - D5 - D6 });
-      points.push({ X: X0 + (B1 - T1) / 2 - (B2 - T1) / 2, Y: Y0 + D1 - D5 });
-      points.push({ X: X0 + (B1 - T1) / 2 - (B2 - T1) / 2, Y: Y0 + D1 });
-      points.push({ X: X0 + (B1 - T1) / 2 + (B2 + T1) / 2, Y: Y0 + D1 });
-      points.push({ X: X0 + (B1 - T1) / 2 + (B2 + T1) / 2, Y: Y0 + D1 - D5 });
-      points.push({ X: X0 + (B1 + T1) / 2, Y: Y0 + D1 - D5 - D6 });
-      points.push({ X: X0 + (B1 + T1) / 2, Y: Y0 + D2 + D3 });
-      points.push({ X: X0 + B1, Y: Y0 + D2 });
-      points.push({ X: X0 + B1, Y: Y0 });
+      points.push({ X: 0, Y: D1 }); // A
+      points.push({ X: 0, Y: D1 - D2 }); // B
+      points.push({ X: (B1 - T1) / 2, Y: D1 - D2 - D3 }); // C
+      points.push({ X: (B1 - T1) / 2, Y: D5 + D6 }); // D
+      points.push({ X: (B1 - T1) / 2 - (B2 - T1) / 2, Y: D5 }); // E
+      points.push({ X: (B1 - T1) / 2 - (B2 - T1) / 2, Y: 0 }); // F
+      points.push({ X: (B1 - T1) / 2 + (B2 + T1) / 2, Y: 0 }); // G
+      points.push({ X: (B1 - T1) / 2 + (B2 + T1) / 2, Y: D5 }); // H
+      points.push({ X: (B1 + T1) / 2, Y: D5 + D6 }); // I
+      points.push({ X: (B1 + T1) / 2, Y: D1 - D2 - D3 }); // J
+      points.push({ X: B1, Y: D1 - D2 }); // K
+      points.push({ X: B1, Y: D1 }); // L
 
       polygons.push({ points: points });
     }
 
     //console.log("myS2k > getPolygons", polygons);
     return polygons;
+  },
+  // [svg coordinates' system]
+  getPolygonsSvg({
+    section,
+    X0,
+    Y0,
+  }: {
+    section: Section;
+    X0?: number;
+    Y0?: number;
+  }) {
+    //console.log("getPolygonsSvg", section);
+    if (!section) return [];
+
+    // origin
+    if (!X0) X0 = 0;
+    if (!Y0) Y0 = 0;
+
+    // get s2k polygons
+    const s2kPolygons: Polygon[] = this.getPolygons({ section });
+
+    // get yMax
+    let { yMax }: { yMax: number } = { yMax: -Number.MAX_VALUE };
+    for (const polygon of s2kPolygons) {
+      const limits = this.getPolygonLimits(polygon.points);
+      if (limits.yMax > yMax) yMax = limits.yMax;
+    }
+    //console.log("myS2k > getPolygonsSvg > yMax", yMax);
+
+    // transform s2k to svg
+    const svgPolygons: Polygon[] = [];
+    for (const polygon of s2kPolygons) {
+      const svgPolygon: Polygon = myUtils.deepClone(polygon);
+
+      const points = svgPolygon.points?.map((p: Point2D) => {
+        return { X: X0 + p.X, Y: Y0 + yMax - p.Y };
+      });
+      //console.log("myS2k > getSDSectionPolygons > svgPolygon", svgPolygon);
+
+      svgPolygons.push(Object.assign(svgPolygon, { points: points }));
+    }
+
+    //console.log("myS2k > getPolygonsSvg", polygons);
+    return svgPolygons;
   },
 
   /**
@@ -391,6 +496,8 @@ export const myS2k = {
         ixy_origin +=
           (p1.X * p2.Y + 2 * p1.X * p1.Y + 2 * p2.X * p2.Y + p2.X * p1.Y) *
           crossProduct;
+
+        //console.log(area);
       }
       //area *= 0.5;
       /*
@@ -400,27 +507,14 @@ export const myS2k = {
         }
         */
 
-      //
-      // qui serve il < 0 perchè alcuni poligoni arrivano in senso anti-orario
-      // bisogna capire quali
-      //
-      if (area < 0) {
-        area *= -0.5;
-
-        cX /= -6 * area;
-        cY /= -6 * area;
-        ix_origin /= -12;
-        iy_origin /= -12;
-        ixy_origin /= -24;
-      } else {
-        area *= 0.5;
-
-        cX /= 6 * area;
-        cY /= 6 * area;
-        ix_origin /= 12;
-        iy_origin /= 12;
-        ixy_origin /= 24;
-      }
+      // counter-clockwise => area > 0
+      // clockwise => area < 0
+      area *= 0.5;
+      cX /= 6 * area;
+      cY /= 6 * area;
+      ix_origin /= 12;
+      iy_origin /= 12;
+      ixy_origin /= 24;
       //console.log(area);
 
       const ix: number = ix_origin - area * cY * cY;
@@ -468,7 +562,7 @@ export const myS2k = {
       };
     } catch (err) {
       // catch
-      console.error("S2k > getPolygonProperties > err:", err);
+      console.error("myS2k > getPolygonProperties > err:", err);
       return {};
     } finally {
       // finally
@@ -504,13 +598,19 @@ export const myS2k = {
       };
 
       for (const polygon of polygons) {
-        const scale: number = polygon.hasOwnProperty("scale")
-          ? polygon.scale
-          : 1;
+        //console.log("getPolygonsProperties", polygon);
+        let scale: number = polygon.hasOwnProperty("scale") ? polygon.scale : 1;
+        if (
+          polygon.hasOwnProperty("ShapeMat") &&
+          polygon.ShapeMat === "Opening"
+        ) {
+          scale = 0;
+        }
+
         const props: any | undefined = this.getPolygonProperties(
           polygon.points,
         );
-        //console.log("props", props.area, props.centroid);
+        //console.log("props", scale, props.area, props.centroid);
         if (props === undefined) continue;
 
         area += scale * props.hasOwnProperty("area") ? props.area : 0;
@@ -628,14 +728,14 @@ export const myS2k = {
 
     if (Shape === "Rectangular") {
       quotes.push({
-        X: X0 + t2 / 2,
+        X: t2 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t2 = ${t2} m`,
       });
       quotes.push({
         X: X0 - delta,
-        Y: Y0 + t3 / 2,
+        Y: t3 / 2,
         angle: -90,
         txt: `t3 = ${t3} m`,
       });
@@ -643,27 +743,27 @@ export const myS2k = {
 
     if (Shape == "Tee") {
       quotes.push({
-        X: X0 + t2 / 2,
+        X: t2 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t2 = ${t2} m`,
       });
       quotes.push({
         X: X0 - delta,
-        Y: Y0 + t3 / 2,
+        Y: t3 / 2,
         angle: -90,
         txt: `t3 = ${t3} m`,
       });
 
       quotes.push({
-        X: X0 + t2 / 2,
-        Y: Y0 + t3 + (3 * delta) / 2,
+        X: t2 / 2,
+        Y: t3 + (3 * delta) / 2,
         angle: 0,
         txt: `tw = ${tw} m`,
       });
       quotes.push({
-        X: X0 + t2 + (3 * delta) / 2,
-        Y: Y0 + tf / 2,
+        X: t2 + (3 * delta) / 2,
+        Y: tf / 2,
         angle: -90,
         txt: `tf = ${tf} m`,
       });
@@ -671,40 +771,40 @@ export const myS2k = {
 
     if (Shape === "I/Wide Flange") {
       quotes.push({
-        X: X0 + Math.max(t2, t2b) / 2,
+        X: Math.max(t2, t2b) / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t2 = ${t2} m`,
       });
       quotes.push({
         X: X0 - delta,
-        Y: Y0 + t3 / 2,
+        Y: t3 / 2,
         angle: -90,
         txt: `t3 = ${t3} m`,
       });
       quotes.push({
-        X: X0 + Math.max(t2, t2b) + (3 * delta) / 2,
-        Y: Y0 + tf / 2,
+        X: Math.max(t2, t2b) + (3 * delta) / 2,
+        Y: tf / 2,
         angle: -90,
         txt: `tf = ${tf} m`,
       });
 
       quotes.push({
-        X: X0 + Math.max(t2, t2b) / 2,
-        Y: Y0 + t3 / 2,
+        X: Math.max(t2, t2b) / 2,
+        Y: t3 / 2,
         angle: 0,
         txt: `tw = ${tw} m`,
       });
 
       quotes.push({
-        X: X0 + Math.max(t2, t2b) / 2,
-        Y: Y0 + t3 + (3 * delta) / 2,
+        X: Math.max(t2, t2b) / 2,
+        Y: t3 + (3 * delta) / 2,
         angle: 0,
         txt: `t2b = ${t2b} m`,
       });
       quotes.push({
-        X: X0 + Math.max(t2, t2b) + (3 * delta) / 2,
-        Y: Y0 + t3 - tfb / 2,
+        X: Math.max(t2, t2b) + (3 * delta) / 2,
+        Y: t3 - tfb / 2,
         angle: -90,
         txt: `tfb = ${tfb} m`,
       });
@@ -712,26 +812,26 @@ export const myS2k = {
 
     if (Shape == "Box/Tube") {
       quotes.push({
-        X: X0 + t2 / 2,
+        X: t2 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t2 = ${t2} m`,
       });
       quotes.push({
         X: X0 - delta,
-        Y: Y0 + t3 / 2,
+        Y: t3 / 2,
         angle: -90,
         txt: `t3 = ${t3} m`,
       });
       quotes.push({
-        X: X0 + t2 + (3 * delta) / 2,
-        Y: Y0 + tf / 2,
+        X: t2 + (3 * delta) / 2,
+        Y: tf / 2,
         angle: -90,
         txt: `tf = ${tf} m`,
       });
       quotes.push({
-        X: X0 + t2 - tw / 2,
-        Y: Y0 + t3 + (3 * delta) / 2,
+        X: t2 - tw / 2,
+        Y: t3 + (3 * delta) / 2,
         angle: 0,
         txt: `tw = ${tw} m`,
       });
@@ -739,7 +839,7 @@ export const myS2k = {
 
     if (Shape === "Circle") {
       quotes.push({
-        X: X0 + t3 / 2,
+        X: t3 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t3 = ${t3} m`,
@@ -748,14 +848,14 @@ export const myS2k = {
 
     if (Shape === "Pipe") {
       quotes.push({
-        X: X0 + t3 / 2,
+        X: t3 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `t3 = ${t3} m`,
       });
       quotes.push({
-        X: X0 + t3 + (3 * delta) / 2,
-        Y: Y0 + tw / 2,
+        X: t3 + (3 * delta) / 2,
+        Y: tw / 2,
         angle: -90,
         txt: `tw = ${tw} m`,
       });
@@ -795,54 +895,54 @@ export const myS2k = {
       let points: Point2D[] = [];
 
       points.push({ X: X0, Y: Y0 });
-      points.push({ X: X0, Y: Y0 + D2 });
-      points.push({ X: X0 + (B1 - T1) / 2, Y: Y0 + D2 + D3 });
-      points.push({ X: X0 + (B1 - T1) / 2, Y: Y0 + D1 - D5 - D6 });
-      points.push({ X: X0 + (B1 - T1) / 2 - (B2 - T1) / 2, Y: Y0 + D1 - D5 });
-      points.push({ X: X0 + (B1 - T1) / 2 - (B2 - T1) / 2, Y: Y0 + D1 });
-      points.push({ X: X0 + (B1 - T1) / 2 + (B2 + T1) / 2, Y: Y0 + D1 });
-      points.push({ X: X0 + (B1 - T1) / 2 + (B2 + T1) / 2, Y: Y0 + D1 - D5 });
-      points.push({ X: X0 + (B1 + T1) / 2, Y: Y0 + D1 - D5 - D6 });
-      points.push({ X: X0 + (B1 + T1) / 2, Y: Y0 + D2 + D3 });
-      points.push({ X: X0 + B1, Y: Y0 + D2 });
-      points.push({ X: X0 + B1, Y: Y0 });
+      points.push({ X: X0, Y: D2 });
+      points.push({ X: (B1 - T1) / 2, Y: D2 + D3 });
+      points.push({ X: (B1 - T1) / 2, Y: D1 - D5 - D6 });
+      points.push({ X: (B1 - T1) / 2 - (B2 - T1) / 2, Y: D1 - D5 });
+      points.push({ X: (B1 - T1) / 2 - (B2 - T1) / 2, Y: D1 });
+      points.push({ X: (B1 - T1) / 2 + (B2 + T1) / 2, Y: D1 });
+      points.push({ X: (B1 - T1) / 2 + (B2 + T1) / 2, Y: D1 - D5 });
+      points.push({ X: (B1 + T1) / 2, Y: D1 - D5 - D6 });
+      points.push({ X: (B1 + T1) / 2, Y: D2 + D3 });
+      points.push({ X: B1, Y: D2 });
+      points.push({ X: B1, Y: Y0 });
 
       //polygons.push({ points: points });
 
       quotes.push({
-        X: X0 + B1 / 2,
+        X: B1 / 2,
         Y: Y0 - delta,
         angle: 0,
         txt: `B1 = ${B1} m`,
       });
       quotes.push({
-        X: X0 + B1 / 2,
-        Y: Y0 + D1 / 2,
+        X: B1 / 2,
+        Y: D1 / 2,
         angle: 0,
         txt: `T1 = ${T1} m`,
       });
       quotes.push({
-        X: X0 + B1 / 2,
-        Y: Y0 + D1 + (3 * delta) / 2,
+        X: B1 / 2,
+        Y: D1 + (3 * delta) / 2,
         angle: 0,
         txt: `B2 = ${B2} m`,
       });
 
       quotes.push({
         X: X0 - delta,
-        Y: Y0 + D1 / 2,
+        Y: D1 / 2,
         angle: -90,
         txt: `D1 = ${D1} m`,
       });
       quotes.push({
-        X: X0 + B1 + (3 * delta) / 2,
-        Y: Y0 + D2 / 2,
+        X: B1 + (3 * delta) / 2,
+        Y: D2 / 2,
         angle: -90,
         txt: `D2 = ${D2} m`,
       });
       quotes.push({
-        X: X0 + B1 + (3 * delta) / 2,
-        Y: Y0 + D1 - D5 / 2,
+        X: B1 + (3 * delta) / 2,
+        Y: D1 - D5 / 2,
         angle: -90,
         txt: `D5 = ${D5} m`,
       });
@@ -850,5 +950,142 @@ export const myS2k = {
 
     //console.log("S2k > getQuotes", quotes);
     return quotes;
+  },
+
+  /*
+   * get polygon properties
+   *
+   */
+  getPolygonProperties_01(vertici: Punto[]): ProprietaPoligono {
+    if (vertici.length < 3) {
+      throw new Error("Un poligono deve avere almeno 3 vertici.");
+    }
+    console.log(vertici);
+
+    const n = vertici.length;
+
+    let areaDoppia = 0;
+    let perimetro = 0;
+
+    let cx = 0;
+    let cy = 0;
+
+    // Momenti rispetto all'origine
+    let Ix0 = 0;
+    let Iy0 = 0;
+    let Ixy0 = 0;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i < n; i++) {
+      const p1 = vertici[i];
+      const p2 = vertici[(i + 1) % n];
+
+      const x1 = p1.X;
+      const y1 = p1.Y;
+
+      const x2 = p2.X;
+      const y2 = p2.Y;
+
+      // Termine shoelace
+      const cross = x1 * y2 - x2 * y1;
+      //console.log(cross);
+
+      areaDoppia += cross;
+
+      // Centroide
+      cx += (x1 + x2) * cross;
+      cy += (y1 + y2) * cross;
+
+      // Perimetro
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      perimetro += Math.sqrt(dx * dx + dy * dy);
+
+      // Bounding box
+      minX = Math.min(minX, x1);
+      minY = Math.min(minY, y1);
+      maxX = Math.max(maxX, x1);
+      maxY = Math.max(maxY, y1);
+
+      // Momenti di inerzia rispetto all'origine
+      Ix0 += (y1 * y1 + y1 * y2 + y2 * y2) * cross;
+      Iy0 += (x1 * x1 + x1 * x2 + x2 * x2) * cross;
+      Ixy0 += (x1 * y2 + 2 * x1 * y1 + 2 * x2 * y2 + x2 * y1) * cross;
+    }
+
+    const areaSegnata = areaDoppia / 2;
+    const area = Math.abs(areaSegnata);
+
+    // Centroide finale
+    cx = cx / (3 * areaDoppia);
+    cy = cy / (3 * areaDoppia);
+
+    // Normalizzazione momenti rispetto all'origine
+    Ix0 = Ix0 / 12;
+    Iy0 = Iy0 / 12;
+    Ixy0 = Ixy0 / 24;
+
+    // Uso valore assoluto per evitare segni negativi
+    Ix0 = Math.abs(Ix0);
+    Iy0 = Math.abs(Iy0);
+    Ixy0 = Math.abs(Ixy0);
+
+    // Teorema di Huygens-Steiner
+    const IxG = Ix0 - area * cy * cy;
+    const IyG = Iy0 - area * cx * cx;
+    const IxyG = Ixy0 - area * cx * cy;
+
+    return {
+      area,
+      perimetro,
+      centroide: {
+        X: cx,
+        Y: cy,
+      },
+      boundingBox: {
+        minX,
+        minY,
+        maxX,
+        maxY,
+      },
+      numeroVertici: n,
+      orientamento: areaSegnata > 0 ? "antiorario" : "orario",
+      inerzia: {
+        origine: {
+          Ix: Ix0,
+          Iy: Iy0,
+          Ixy: Ixy0,
+          J: Ix0 + Iy0,
+        },
+
+        baricentro: {
+          Ix: IxG,
+          Iy: IyG,
+          Ixy: IxyG,
+          J: IxG + IyG,
+        },
+      },
+
+      //
+      //
+      //
+      centroid: { X: cx, Y: cy },
+      //area: area,
+      ix_origin: Ix0,
+      iy_origin: Iy0,
+      ixy_origin: Ixy0,
+      ix: IxG,
+      iy: IyG,
+      ixy: IxyG,
+      // limits
+      xMin: minX,
+      xMax: maxX,
+      yMin: minY,
+      yMax: maxY,
+    };
   },
 };

@@ -18,15 +18,33 @@ import { mySvg } from "../services/mySvg";
 
 import { myS2k } from "../services/myS2k";
 
+import { inject } from "vue";
+//const darkMode = inject("darkMode");
+const darkMode = inject("darkMode", true);
+//console.log(`setPalette > darkMode: ${darkMode}`);
+
+const getDarkMode = async (): Promise<boolean> => {
+  const item: string | null = localStorage.getItem("my-lab-darkmode");
+  //console.log("getDarkMode", item);
+  return item ? JSON.parse(item).darkMode : true;
+};
+
+// setPalette
+const palette = ref({ background: "#424242", black: "#eee", gray: "#868e96" });
+const setPalette = (dark: boolean = true) => {
+  //console.log(`setPalette > dark: ${dark}`);
+  palette.value = dark
+    ? { background: "#424242", black: "#eee", gray: "#868e96" }
+    : { background: "#eee", black: "#424242", gray: "#ccc" };
+  //console.log("setPalette > palette", palette.value);
+};
+watch(darkMode, async (n: any) => {
+  //console.log(`darkMode: ${n}`);
+  await getDarkMode().then((dark: boolean) => setPalette(dark));
+});
+
 // emit
-const emit = defineEmits([
-  "update:sections",
-  "update:polygons",
-  "update:options",
-  //"action",
-  //"selectedElement",
-  //"selectedElements",
-]);
+//const emit = defineEmits([  "update:sections",  "update:polygons",  "update:options"]);
 
 // const
 //const BoardID: string = `Board-${u.uuid(8)}`;
@@ -90,6 +108,8 @@ const cursor = ref<string>("default");
 onMounted(async () => {
   //console.log("onMounted", section.value);
   loading.value = true;
+
+  await getDarkMode().then((dark: boolean) => setPalette(dark));
 
   if (svg.value) svg.value.focus();
 
@@ -240,7 +260,8 @@ const onSvgPointerMove = (event: any) => {
 
     // update here
     options.value.camera = mySvg.panCamera(options.value.camera, -dx, -dy);
-    //console.log("Board > onPointerMove > camera", options.value.camera);
+
+    //console.log("SectionEditor > onPointerMove > camera", options.value.camera);
     svgOffset.value = point;
     cursor.value = "grabbing";
   }
@@ -357,29 +378,10 @@ const PanMode = () => {
   myAddEventListener(document.getElementById(SvgBoardID), eventsListSvgPan);
 };
 
-import { inject } from "vue";
-//const darkMode = inject("darkMode");
-const darkMode = inject("darkMode", true);
-
-// setPalette
-const palette = ref();
-const setPalette = (dark: boolean = true) => {
-  //console.log(`setPalette > dark: ${dark}`);
-  palette.value = dark
-    ? { black: "#424242", gray: "#868e96" }
-    : { black: "#eee", gray: "#f8f9fa" };
-};
-setPalette(darkMode);
-watch(darkMode, (n: any) => {
-  //console.log(`darkMode: ${n}`);
-  setPalette(n);
-  //console.warn(`palette: ${palette.value.black}`);
-});
-
 const sizeHeight = computed(() => `${0.8 * size.value[1]}px`);
 const scale4svg = computed((): [number, number, number] => [
   scaleUnits.value[0],
-  scaleUnits.value[1] * 1e3,
+  scaleUnits.value[1] * 1e3, // mm
   scaleUnits.value[2],
 ]);
 const transform = computed(() => {
@@ -420,7 +422,7 @@ const svgPolygons = computed(() => {
 
   if (Shape === "SD Section") {
     // "YES" SD Section
-    getPolygons = myS2k.getSDSectionPolygons({
+    getPolygons = myS2k.getSDSectionPolygonsSvg({
       Section: section.value,
       Polygons: polygons.value,
       //Materials: [],
@@ -429,17 +431,17 @@ const svgPolygons = computed(() => {
     });
   } else {
     // "NO" SD Section
-    getPolygons = myS2k.getPolygons({
+    getPolygons = myS2k.getPolygonsSvg({
       section: section.value,
       X0: options.value.snapGrid / scale4svg.value[1],
       Y0: options.value.snapGrid / scale4svg.value[1],
     });
   }
+  //console.log("SectionEditor > getPolygons", getPolygons);
 
   // loop getPolygons
   //
   for (const polygon of getPolygons) {
-    //console.log("SectionEditor > svgPolygons", polygon);
     let points4polygon: string = "";
     polygon.points?.map(
       (p: Point2D) =>
@@ -454,16 +456,19 @@ const svgPolygons = computed(() => {
           : palette.value.gray,
         strokeWidth: 2,
         //stroke: palette.value.black,
+
+        ZOrder: polygon.hasOwnProperty("ZOrder") ? polygon.ZOrder : 1,
       }),
     );
   }
+  //console.log("SectionEditor > svgPolygons", svgPolygons);
 
   // Source - https://stackoverflow.com/a/1129270
   // Posted by Wogan, modified by community. See post 'Timeline' for change history
   // Retrieved 2026-05-06, License - CC BY-SA 4.0
   svgPolygons.sort((a: Polygon, b: Polygon) => a.ZOrder - b.ZOrder); // b - a for reverse sort
 
-  //console.log("svgPolygons", svgPolygons);
+  //console.log("SectionEditor > svgPolygons", svgPolygons);
   return svgPolygons;
 });
 
@@ -577,7 +582,7 @@ const quotes = computed(() => {
           y1="0"
           :x2="options.snapGrid / 2"
           y2="0"
-          :stroke="palette.gray"
+          :stroke="palette.black"
           stroke-width="3"
         />
         <line
@@ -585,7 +590,7 @@ const quotes = computed(() => {
           y1="0"
           x2="0"
           :y2="options.snapGrid / 2"
-          :stroke="palette.gray"
+          :stroke="palette.black"
           stroke-width="3"
         />
         <!-- polygons -->
@@ -605,7 +610,7 @@ const quotes = computed(() => {
         <circle
           :cx="polygonsCentroid.X"
           :cy="polygonsCentroid.Y"
-          r="4"
+          :r="4 * z"
           :fill="palette.black"
         />
         <!-- text -->
@@ -705,6 +710,7 @@ const quotes = computed(() => {
           <TabList>
             <Tab value="geometry">geo</Tab>
             <Tab value="properties">props</Tab>
+            <Tab value="palette">palette</Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="geometry">
@@ -818,6 +824,18 @@ const quotes = computed(() => {
                 </div>
               </div>
             </TabPanel>
+            <TabPanel value="palette"
+              ><div class="flex flex-col gap-2">
+                <div
+                  v-for="(value, key) in palette"
+                  class="flex flex-row gap-2"
+                >
+                  {{ key }}
+                  <div
+                    :style="`width: 16px; height: 16px; background: ${value}`"
+                  ></div>
+                </div></div
+            ></TabPanel>
           </TabPanels>
         </Tabs>
       </div>

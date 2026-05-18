@@ -3,18 +3,42 @@
     <!-- Sidebar -->
     <aside class="w-96 shrink-0 border-r overflow-auto flex flex-col gap-2">
       <div class="flex flex-row gap-2">
-        <div>fecth</div>
+        <Select
+          v-model="myFile"
+          :options="myFiles"
+          optionLabel="name"
+          placeholder="Select a file"
+          class="w-3/4"
+          @change="resetData"
+        />
         <Button label="fetch" @click="fetchData" :disabled="isLoading" />
+      </div>
+
+      <div class="flex flex-row gap-2">
+        <div>fields: {{ fields.length }}</div>
+        <div>records: {{ records.length }}</div>
       </div>
 
       <div>
         <ol>
           <li v-for="(field, fdex) in fields" class="text-left">
             {{ fdex }} : {{ field.id }}
+            <ul class="flex flex-col gap-1 border-top-1">
+              <li
+                v-for="(value, key) in field.info"
+                :key="key"
+                class="w-5/6 flex flex-row gap-1"
+              >
+                <div>&nbsp;</div>
+                <div>{{ key }}:</div>
+                <div>{{ value }}</div>
+              </li>
+            </ul>
           </li>
         </ol>
       </div>
 
+      <!--
       <div>
         <VueJsonPretty
           :data="records"
@@ -23,15 +47,16 @@
           :theme="darkMode ? 'dark' : 'light'"
         />
       </div>
+      -->
     </aside>
 
     <!-- Main -->
     <main class="flex-1 overflow-auto min-w-0">
       <div class="p-2 min-w-max">
         <!-- Contenuto molto largo -->
-        <div class="w-full min-h-[600px] rounded-xl p-4 flex flex-col border-1">
-          <Map v-if="false" :fields="fields" :records="records" />
-
+        <div class="w-full min-h-[600px] rounded p-2 flex flex-col border-1">
+          <Map :fields="fields" :records="records" />
+          <!--  
           <table>
             <thead>
               <tr>
@@ -51,6 +76,7 @@
               </tr>
             </tbody>
           </table>
+          -->
         </div>
       </div>
     </main>
@@ -114,6 +140,14 @@ const fetchData = async () => {
   } catch (error) {
     console.error(error.message);
   }
+};
+
+// ----------------------
+// resetData
+// ----------------------
+const resetData = () => {
+  fields.value = [];
+  records.value = [];
 };
 </script>
 

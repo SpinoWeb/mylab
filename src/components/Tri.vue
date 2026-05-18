@@ -23,18 +23,18 @@
       <Button
         label="s2k"
         icon="pi pi-database"
-        @click="tableDataVisible = true"
+        @click="openDialog('tableDataVisible')"
         :disabled="loading"
       />
       <Button
         label="tri"
         icon="pi pi-database"
-        @click="triDataVisible = true"
+        @click="openDialog('triDataVisible')"
         :disabled="loading"
       />
       <Button
         icon="pi pi-eject"
-        @click="sectionEditorDialog = true"
+        @click="openDialog('sectionEditorDialog')"
         :disabled="loading"
       />
 
@@ -134,9 +134,9 @@
         </template>
         <div v-if="dataTri.hasOwnProperty('Sections')" class="w-full h-full">
           <SectionEditor
-            v-model:sections="dataTri.Sections"
-            v-model:polygons="dataTri.Polygons"
-            v-model:options="boardOptions"
+            :sections="dataTri.Sections"
+            :polygons="dataTri.Polygons"
+            :options="boardOptions"
             :scaleUnits="scaleUnits"
             :size="[0.85 * clientSize[0], 0.85 * clientSize[1]]"
           />
@@ -237,6 +237,26 @@ const clientSize = computed(() => [
   document.documentElement.clientWidth,
   document.documentElement.clientHeight,
 ]);
+
+//
+// openDialog
+//
+const openDialog = (dialog: string | undefined) => {
+  switch (dialog) {
+    case "tableDataVisible":
+      tableDataVisible.value = true;
+      break;
+    case "triDataVisible":
+      triDataVisible.value = true;
+      break;
+    case "sectionEditorDialog":
+      sectionEditorDialog.value = true;
+      break;
+    default:
+      // undefined or not corresponding
+      break;
+  }
+};
 
 //
 //

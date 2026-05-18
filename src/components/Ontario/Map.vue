@@ -7,7 +7,8 @@ import L from "leaflet";
 import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
-import { myUtils } from "../../services/myUtils";
+import Rainbow from "rainbowvis.js";
+//import { myUtils } from "../../services/myUtils";
 
 // const
 const circleMarkerUnSelected = {
@@ -27,7 +28,7 @@ const circleMarkerSelected = {
 // proprietà dell'opera
 // che vengono visualizzate
 //
-const keysOfItem = [
+const keysOfItem0 = [
   //"_id",
   "Category",
   "Supporting Ministry",
@@ -94,6 +95,8 @@ const bridges = computed(() => {
   return bridges;
 });
 
+const keysOfItem = computed(() => fields.value.map((x) => x.id));
+
 // define model
 watch(bridges, () => setMarkers(), { deep: true });
 
@@ -110,6 +113,33 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (map.value) map.value.remove();
 });
+
+const randomIntFromInterval = (min: number = 1, max: number = 100): number => {
+  // min and max included
+  return Math.floor(Math.random() * (max - min + 1) + min);
+};
+const getColorFromScale = (value: number): string => {
+  // Assicura che il valore sia tra 1 e 100
+  const normalizedValue = Math.min(Math.max(value, 1), 100);
+
+  // Calcola i canali Red e Green (0-255)
+  // Più il valore è alto, meno rosso e più verde avremo
+  /*
+  const r = Math.round((255 * (100 - normalizedValue)) / 99);
+  const g = Math.round((255 * (normalizedValue - 1)) / 99);
+  const b = 0;
+  */
+
+  // Calcola i canali (1 = tutto rosso, 100 = tutto blu)
+  const r = Math.round((255 * (100 - normalizedValue)) / 99);
+  const g = 0;
+  const b = Math.round((255 * (normalizedValue - 1)) / 99);
+
+  // Converte in formato esadecimale con padding
+  const toHex = (c: number) => c.toString(16).padStart(2, "0");
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+};
 
 // init map
 const initMap = async () => {
@@ -155,12 +185,21 @@ const setMarkers = async () => {
 
   await delMarkers();
 
+  const myRainbow: Rainbow = new Rainbow();
+  const min: number = 1,
+    max: number = 100;
+  myRainbow.setNumberRange(min, max);
+  myRainbow.setSpectrum("red", "green");
+
   markers.value = [];
   for await (const bridge of bridges.value) {
     //console.log(bridge);
 
     const { _id, Latitude, Longitude, LATITUDE, LONGITUDE } = bridge;
-    //console.log(_id, Latitude, Longitude, LATITUDE, LONGITUDE);
+    let CURRENT_BCI = bridge.hasOwnProperty("CURRENT BCI")
+      ? bridge["CURRENT BCI"]
+      : max; // default value
+    //console.log(_id, Latitude, Longitude, LATITUDE, LONGITUDE, CURRENT_BCI);
 
     //
     // set marker
@@ -179,14 +218,14 @@ const setMarkers = async () => {
         lons = LONGITUDE.split("|").map((x: string) => parseFloat(x));
       }
 
-      console.log(_id, lats, lons);
+      //console.log(_id, lats, lons);
       if (lats.includes(NaN) || lons.includes(NaN)) continue;
 
       let html: string = "<b>" + _id + "</b>\n";
 
       html += "<div style='width: 100%; height: 240px; overflow-y: auto'>";
       html += "<table>\n<tbody>";
-      for (const key of keysOfItem) {
+      for (const key of keysOfItem.value) {
         if (bridge.hasOwnProperty(key) && bridge[key] != null) {
           html += "\n<tr>\n";
           html += `<td class='p-1 border-b border-blue-gray-50'>${key}</td>`;
@@ -198,10 +237,17 @@ const setMarkers = async () => {
       html += "</div>";
 
       // marker
+      const color: string = "#" + myRainbow.colourAt(CURRENT_BCI);
+      //const color:string = getColorFromScale(randomIntFromInterval());
       const marker = L.circleMarker(
         [lats[0], lons[0]],
-        circleMarkerUnSelected,
-        //circleMarkerSelected,
+        //circleMarkerUnSelected,
+        {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.5,
+          radius: 6,
+        },
       ).bindPopup(html);
       //.on('click', clickOnMarker);
 

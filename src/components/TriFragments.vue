@@ -122,6 +122,7 @@ const options = toRef(props, "options");
 const loading = toRef(props, "loading");
 
 import { inject } from "vue";
+import { backgroundSize } from "highcharts";
 //const darkMode = inject("darkMode");
 const darkMode = inject("darkMode", true);
 
@@ -130,8 +131,8 @@ const palette = ref();
 const setPalette = (dark: boolean = true) => {
   //console.log(`setPalette > dark: ${dark}`);
   palette.value = dark
-    ? { black: "#424242", gray: "#868e96" }
-    : { black: "#eee", gray: "#f8f9fa" };
+    ? { background: "#424242", black: "#eee", gray: "#868e96" }
+    : { background: "#eee", black: "#424242", gray: "#f8f9fa" };
 };
 setPalette(darkMode);
 
@@ -181,7 +182,7 @@ let mainContainer: any,
 watch(darkMode, (n: any) => {
   //console.log(`darkMode: ${n}`);
   setPalette(n);
-  world.scene.three.background = palette.value.black;
+  world.scene.three.background = palette.value.background;
 });
 
 watch(data, () => {
@@ -638,10 +639,8 @@ const addFrameExtrude = ({
   polygons?: Polygon[];
   scale?: Point3D;
 }) => {
-  //console.log("addFrameExtrude", Offset);
-
-  const q0: number = 180;
-  let q: number = 0;
+  //console.log("addFrameExtrude", section);
+  if (!section) return { extrude: undefined };
 
   if (!Offset) Offset = [0, 0, 0, 0, 0, 0];
   //if (!section) return;
@@ -683,7 +682,6 @@ const addFrameExtrude = ({
 
   if (Shape === "SD Section") {
     // "YES" SD Section
-    q = 0;
     const getPolygons = myS2k.getSDSectionPolygons({
       Section: section,
       Polygons: polygons,
@@ -741,7 +739,6 @@ const addFrameExtrude = ({
     }
   } else {
     // "NO" SD Section
-    q = q0;
     getPolygons = myS2k.getPolygons({ section: section });
     //console.log("getPolygons", getPolygons);
 
@@ -811,7 +808,8 @@ const addFrameExtrude = ({
   let lines: THREE.LineSegments = new THREE.LineSegments(
     edges,
     new THREE.LineBasicMaterial({
-      color: myTri.setColor(palette.value.black),
+      //color: myTri.setColor(palette.value.black),
+      color: myTri.setColor("#424242"),
     }),
   );
 
@@ -834,6 +832,7 @@ const addFrameExtrude = ({
 
   // move to correct position
   //
+  const q: number = 0; // ruota la sezione rispetto all'asse dell'elemento
   const qRad: number = (q * Math.PI) / 180;
   const midpointV3: THREE.Vector3 = new THREE.Vector3()
     .addVectors(startExtrude, endExtrude)
