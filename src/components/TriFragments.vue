@@ -1,50 +1,66 @@
 <template>
   <div ref="frag-container" id="frag-container" class="w-full h-full">
-    <div class="absolute top-12 left-0 flex flex-column gap-2 p-2">
-      <Button icon="pi pi-play" :disabled="loading" @click="play()" />
-      <Button icon="pi pi-times" :disabled="loading" @click="clear()" />
-      <Button
-        icon="pi pi-table"
-        :style="`background: ${Settings.grids.labelColor}`"
-        :disabled="loading"
-        @click="setObjectVisible('grids')"
-      />
-      <Button
-        icon="pi pi-tag"
-        :style="`background: ${Settings.joints.labelColor}`"
-        :disabled="loading"
-        @click="setObjectVisible('jointsLabels')"
-      />
-      <Button
-        icon="pi pi-tag"
-        :style="`background: ${Settings.frames.labelColor}`"
-        :disabled="loading"
-        @click="setObjectVisible('framesLabels')"
-      />
-      <Button
-        icon="pi pi-arrow-right"
-        :style="`background: ${Settings.frames.labelColor}`"
-        :disabled="loading"
-        @click="setObjectVisible('framesLocalAxes')"
-      />
-      <Button
-        icon="pi pi-box"
-        :style="`background: ${Settings.frames.extrudeColor}`"
-        :disabled="loading"
-        @click="setObjectVisible('framesSolids')"
-      />
-      <Button
-        icon="pi pi-bolt"
-        :style="`background: ${Settings.links.color}`"
-        :disabled="loading"
-        @click="setObjectVisible('links')"
-      />
-      <Button
-        icon="pi pi-wave-pulse"
-        :style="`background: ${Settings.tendons.color}`"
-        :disabled="loading"
-        @click="setObjectVisible('tendons')"
-      />
+    <div class="absolute top-12 left-0 flex flex-row gap-2 p-2">
+      <div class="flex flex-col gap-2">
+        <Button icon="pi pi-play" :disabled="loading" @click="play()" />
+        <Button icon="pi pi-times" :disabled="loading" @click="clear()" />
+        <Button
+          icon="pi pi-table"
+          :style="`background: ${Settings.grids.labelColor}`"
+          :disabled="loading"
+          @click="setObjectVisible('grids')"
+        />
+        <Button
+          icon="pi pi-tag"
+          :style="`background: ${Settings.joints.labelColor}`"
+          :disabled="loading"
+          @click="setObjectVisible('jointsLabels')"
+        />
+        <Button
+          icon="pi pi-tag"
+          :style="`background: ${Settings.frames.labelColor}`"
+          :disabled="loading"
+          @click="setObjectVisible('framesLabels')"
+        />
+        <Button
+          icon="pi pi-arrow-right"
+          :style="`background: ${Settings.frames.labelColor}`"
+          :disabled="loading"
+          @click="setObjectVisible('framesLocalAxes')"
+        />
+        <Button
+          icon="pi pi-box"
+          :style="`background: ${Settings.frames.extrudeColor}`"
+          :disabled="loading"
+          @click="setObjectVisible('framesSolids')"
+        />
+        <Button
+          icon="pi pi-bolt"
+          :style="`background: ${Settings.links.color}`"
+          :disabled="loading"
+          @click="setObjectVisible('links')"
+        />
+        <Button
+          icon="pi pi-wave-pulse"
+          :style="`background: ${Settings.tendons.color}`"
+          :disabled="loading"
+          @click="setObjectVisible('tendons')"
+        />
+      </div>
+      <!-- ulteriore div se serve -->
+    </div>
+
+    <div class="absolute bottom-0 left-12 flex flex-row gap-2 p-2">
+      <div class="flex flex-row gap-2">
+        <Button
+          v-for="i in ['3D', 'Top', 'Bottom', 'Front', 'Back', 'Side']"
+          :key="i"
+          :label="i"
+          :disabled="loading"
+          @click="setCameraPreset(i)"
+        />
+        <Button label="Fit" :disabled="loading" @click="fitCamera" />
+      </div>
     </div>
 
     <div class="absolute top-12 right-0 p-2">{{ getModelsIds() }}</div>
@@ -122,7 +138,7 @@ const options = toRef(props, "options");
 const loading = toRef(props, "loading");
 
 import { inject } from "vue";
-import { backgroundSize } from "highcharts";
+import { myUtils } from "../services/myUtils";
 //const darkMode = inject("darkMode");
 const darkMode = inject("darkMode", true);
 
@@ -251,6 +267,73 @@ const setScene = async () => {
 
   const axes: THREE.AxesHelper = new THREE.AxesHelper(1);
   world.scene.three.add(axes);
+};
+
+// -------------
+// setCameraPreset
+// -------------
+const setCameraPreset = (preset: string = "3d") => {
+  //view.value = preset;
+  const ctl = world?.camera?.controls;
+  if (!ctl) return;
+
+  console.olog(`View: ${preset}`);
+  if (preset === "3D") ctl.setLookAt(25, 25, 25, 0, 0, 0, true); // 3D
+  if (preset === "Top") ctl.setLookAt(0, 40, 0, 0, 0, 0, true); // Top
+  if (preset === "Bottom") ctl.setLookAt(0, -40, 0, 0, 0, 0, true); // Bottom
+  if (preset === "Front") ctl.setLookAt(0, 5, 30, 0, 5, 0, true); // Front
+  if (preset === "Back") ctl.setLookAt(0, 5, -30, 0, 5, 0, true); // Back
+  if (preset === "Side") ctl.setLookAt(30, 5, 0, 0, 5, 0, true); // Side
+};
+
+const fitCamera = () => {
+  console.olog("View: Fit");
+  if (!data) {
+    setCameraPreset("3D");
+    return;
+  }
+
+  //
+  // get Joints
+  //
+  const JointCoordinates = data.value.hasOwnProperty("Joints")
+    ? data.value["Joints"]
+    : [];
+
+  //
+  // scale
+  //
+  const scale: Point3D = {
+    X: options.value.scaleUnits[1],
+    Y: options.value.scaleUnits[1],
+    Z: options.value.scaleUnits[1],
+  };
+
+  let cx: number = 0,
+    cy: number = 0,
+    cz: number = 0,
+    n: number = 0;
+  for (let i = 0; i < JointCoordinates.length; i++) {
+    const record = JointCoordinates[i];
+    cx += record.XorR;
+    cy += record.Z;
+    cz += -record.Y;
+    n++;
+  }
+
+  cx /= n;
+  cy /= n;
+  cz /= n;
+  //console.log(cx, cy, cz);
+  world?.camera?.controls.setLookAt(
+    cx * scale.X + 25,
+    cy * scale.Y + 25,
+    cz * scale.Z + 25,
+    cx * scale.X,
+    cy * scale.Y,
+    cz * scale.Z,
+    true,
+  );
 };
 
 // -------------
@@ -538,9 +621,9 @@ const addFrame = ({
   const color: string | undefined = Settings?.frames?.color;
   //const size: number | undefined = Settings?.frames?.size;
   const labelColor: string | undefined = Settings?.frames?.labelColor;
-  const extrudeColor: string | undefined = Settings?.frames?.extrudeColor;
-  const extrudeOpacity: number | undefined = Settings?.frames?.extrudeOpacity;
-  const linewidth: number | undefined = Settings?.frames?.linewidth;
+  //const extrudeColor: string | undefined = Settings?.frames?.extrudeColor;
+  //const extrudeOpacity: number | undefined = Settings?.frames?.extrudeOpacity;
+  //const linewidth: number | undefined = Settings?.frames?.linewidth;
   //console.log("myFrame > create > color", color);
 
   const vertex = [
@@ -639,7 +722,7 @@ const addFrameExtrude = ({
   polygons?: Polygon[];
   scale?: Point3D;
 }) => {
-  //console.log("addFrameExtrude", section);
+  //console.log("addFrameExtrude", start, end, scale, Offset);
   if (!section) return { extrude: undefined };
 
   if (!Offset) Offset = [0, 0, 0, 0, 0, 0];
@@ -1029,7 +1112,7 @@ const _play = async (): Promise<void> => {
     }: { point: THREE.Points | undefined; label: THREE.Sprite | undefined } =
       addJoint({
         Joint: record.Joint,
-        XYZ: { X: record.XorR, Y: record.Z, Z: -record.Y },
+        XYZ: { X: record.tX, Y: record.tY, Z: record.tZ }, // threejs
         scale: scale,
       });
     //if (point) scene.add(point);
@@ -1064,29 +1147,13 @@ const _play = async (): Promise<void> => {
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
     //
-    // get Offset
+    // get tOffset
     //
-    const Offset: [number, number, number, number, number, number] = [
-      Frame.hasOwnProperty("JtOffsetXI") && !Frame.JtOffsetXI
-        ? Frame.JtOffsetXI
-        : 0,
-      Frame.hasOwnProperty("JtOffsetZI") && !Frame.JtOffsetZI
-        ? Frame.JtOffsetZI
-        : 0,
-      Frame.hasOwnProperty("JtOffsetYI") && !Frame.JtOffsetYI
-        ? -Frame.JtOffsetYI
-        : 0,
-      Frame.hasOwnProperty("JtOffsetXJ") && !Frame.JtOffsetXI
-        ? Frame.JtOffsetXJ
-        : 0,
-      Frame.hasOwnProperty("JtOffsetZJ") && !Frame.JtOffsetZJ
-        ? Frame.JtOffsetZJ
-        : 0,
-      Frame.hasOwnProperty("JtOffsetYJ") && !Frame.JtOffsetYJ
-        ? -Frame.JtOffsetYJ
-        : 0,
-    ];
-    //console.log("Offset", Offset);
+    let tOffset: [number, number, number, number, number, number] =
+      ConnectivityFrame[i].hasOwnProperty("tOffset")
+        ? ConnectivityFrame[i].tOffset
+        : [0, 0, 0, 0, 0, 0];
+    //console.log("tOffset", tOffset);
 
     //
     // get section, polygons
@@ -1101,8 +1168,8 @@ const _play = async (): Promise<void> => {
     //
     const { line, label, localAxes } = addFrame({
       Frame,
-      start: { X: start.XorR, Y: start.Z, Z: -start.Y },
-      end: { X: end.XorR, Y: end.Z, Z: -end.Y },
+      start: { X: start.tX, Y: start.tY, Z: start.tZ },
+      end: { X: end.tX, Y: end.tY, Z: end.tZ },
       scale: scale,
     });
 
@@ -1122,9 +1189,9 @@ const _play = async (): Promise<void> => {
     //
     const { extrude } = addFrameExtrude({
       Frame,
-      start: { X: start.XorR, Y: start.Z, Z: -start.Y },
-      end: { X: end.XorR, Y: end.Z, Z: -end.Y },
-      Offset: Offset,
+      start: { X: start.tX, Y: start.tY, Z: start.tZ },
+      end: { X: end.tX, Y: end.tY, Z: end.tZ },
+      Offset: tOffset,
       section: section,
       polygons: polygons,
       scale: scale,
@@ -1149,8 +1216,8 @@ const _play = async (): Promise<void> => {
     const end = JointCoordinates.find((k: any) => k.Joint == JointJ);
 
     const vertex = [
-      { X: start.XorR, Y: start.Z, Z: -start.Y },
-      { X: end.XorR, Y: end.Z, Z: -end.Y },
+      { X: start.tX, Y: start.tY, Z: start.tZ },
+      { X: end.tX, Y: end.tY, Z: end.tZ },
     ];
 
     const line: THREE.Line | undefined = myTri.getLine({
@@ -1176,7 +1243,7 @@ const _play = async (): Promise<void> => {
     console.olog(`Tendon: ${Tendon} > ${points.length - 1} segments`);
 
     const vertex: Point3D[] = points.map((i: Point3D) => {
-      return { X: i.X, Y: i.Z, Z: -i.Y };
+      return { X: i.X, Y: i.Y, Z: i.Z };
     });
 
     const line: THREE.Line | undefined = myTri.getLine({

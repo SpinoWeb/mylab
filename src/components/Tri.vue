@@ -718,6 +718,38 @@ const dataToTri = (data: DataTri = {}): DataTri => {
     dataToTri.Joints.push(Joint01);
   }
 
+  // Joints
+  // bound
+  let Ymin: number = Number.MAX_VALUE,
+    Ymax: number = -Number.MAX_VALUE,
+    Zmin: number = Number.MAX_VALUE,
+    Zmax: number = -Number.MAX_VALUE;
+  for (let i = 0; i < dataToTri.Joints.length; i++) {
+    const j = dataToTri.Joints[i];
+    //
+    // get bound
+    //
+    if (Ymin > j.Y) Ymin = j.Y;
+    if (Ymax < j.Y) Ymax = j.Y;
+    if (Zmin > j.Z) Zmin = j.Z;
+    if (Zmax < j.Z) Zmax = j.Z;
+  }
+  //console.log(Ymin, Ymax);
+
+  // from s2k to threejs
+  for (let i = 0; i < dataToTri.Joints.length; i++) {
+    const j = dataToTri.Joints[i];
+    //
+    // from s2k to threejs
+    //
+    Object.assign(j, {
+      tX: j.XorR,
+      tY: j.Z,
+      tZ: -j.Y + Ymax + Ymin,
+    });
+    //console.log(j);
+  }
+
   //
   // Frames
   //
@@ -748,6 +780,38 @@ const dataToTri = (data: DataTri = {}): DataTri => {
 
     //console.log(Joint01);
     dataToTri.Frames.push(Frame01);
+  }
+
+  // Offset > tOffset
+  // from s2k to threejs
+  for (let i = 0; i < dataToTri.Frames.length; i++) {
+    const j = dataToTri.Frames[i];
+    //
+    // from s2k to threejs
+    //
+    let tOffset: [number, number, number, number, number, number] = [
+      j.hasOwnProperty("JtOffsetXI") && j.JtOffsetXI != undefined
+        ? j.JtOffsetXI
+        : 0,
+      j.hasOwnProperty("JtOffsetZI") && j.JtOffsetZI != undefined
+        ? j.JtOffsetZI
+        : 0,
+      j.hasOwnProperty("JtOffsetYI") && j.JtOffsetYI != undefined
+        ? j.JtOffsetYI
+        : 0,
+      j.hasOwnProperty("JtOffsetXJ") && j.JtOffsetXJ != undefined
+        ? j.JtOffsetXJ
+        : 0,
+      j.hasOwnProperty("JtOffsetZJ") && j.JtOffsetZJ != undefined
+        ? j.JtOffsetZJ
+        : 0,
+      j.hasOwnProperty("JtOffsetZJ") && j.JtOffsetZJ != undefined
+        ? j.JtOffsetZJ
+        : 0,
+    ];
+
+    Object.assign(j, { tOffset: tOffset });
+    //console.log(j);
   }
 
   //
@@ -829,7 +893,8 @@ const dataToTri = (data: DataTri = {}): DataTri => {
       );
       //console.log(segments);
       const points = segments.map((x: any) => {
-        return { X: x.XGlobal, Y: x.YGlobal, Z: x.ZGlobal };
+        // from s2k to threejs
+        return { X: x.XGlobal, Y: x.ZGlobal, Z: -x.YGlobal + Ymax + Ymin };
       });
       Object.assign(Tendon01, { points: points });
 

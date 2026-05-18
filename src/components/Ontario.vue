@@ -95,10 +95,10 @@ import "vue-json-pretty/lib/styles.css";
 import { Chart } from "highcharts-vue";
 //import "highcharts/modules/boost";
 
-import { myUtils } from "../services/myUtils";
+//import { myUtils } from "../services/myUtils";
 
-import { inject } from "vue";
-const darkMode = inject("darkMode");
+//import { inject } from "vue";
+//const darkMode = inject("darkMode");
 
 const myFiles = ref([
   {
@@ -118,7 +118,7 @@ const records = ref<any[]>([]);
 //const series = ref<any[]>([]);
 
 const fetchData = async () => {
-  console.log("fetchData");
+  //console.log("fetchData");
 
   isLoading.value = true;
 
@@ -131,14 +131,14 @@ const fetchData = async () => {
     }
 
     const result = await response.json();
-    console.log("fetchData", result);
+    //console.log("fetchData", result);
 
     fields.value = result.fields;
     records.value = result.records;
 
     isLoading.value = false;
   } catch (error) {
-    console.error(error.message);
+    console.error("fetchData > error", error);
   }
 };
 

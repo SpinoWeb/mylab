@@ -718,6 +718,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
+import * as OBF from "@thatopen/components-front";
 import * as WEBIFC from "web-ifc";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -897,22 +898,34 @@ async function initThatOpen() {
 
   worlds = components.get(OBC.Worlds);
   world = worlds.create();
+  //world = worlds.create<OBC.ShadowedScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>();
+
+  world.scene = new OBC.ShadowedScene(components);
+  world.renderer = new OBF.PostproductionRenderer(components, canvasEl.value);
+  world.camera = new OBC.OrthoPerspectiveCamera(components);
+
+  components.init();
+
+  world.camera.controls.setLookAt(50, 50, 50, 0, 0, 0);
+
+  world.renderer.three.shadowMap.enabled = true;
+  world.renderer.three.shadowMap.type = THREE.VSMShadowMap;
 
   // Renderer
-  world.renderer = new OBC.SimpleRenderer(components, canvasEl.value);
-  world.renderer.postproduction.enabled = false;
+  //world.renderer = new OBC.SimpleRenderer(components, canvasEl.value);
+  //world.renderer.postproduction.enabled = false;
 
   // Scena
-  world.scene = new OBC.SimpleScene(components);
-  world.scene.setup(); // aggiunge luci di default
-  world.scene.three.background = new THREE.Color(0x070910);
+  //world.scene = new OBC.SimpleScene(components);
+  //world.scene.setup(); // aggiunge luci di default
+  //world.scene.three.background = new THREE.Color(0x070910);
 
   // Camera
-  world.camera = new OBC.SimpleCamera(components);
-  world.camera.controls.setLookAt(15, 15, 15, 0, 0, 0);
-  world.camera.controls.enableDamping = true;
+  //world.camera = new OBC.SimpleCamera(components);
+  //world.camera.controls.setLookAt(15, 15, 15, 0, 0, 0);
+  //world.camera.controls.enableDamping = true;
 
-  components.init(); // avvia il render loop interno
+  //components.init(); // avvia il render loop interno
 
   // ── Scena extra ───────────────────────────────────────────────────────────
   const grid = new THREE.GridHelper(100, 100, 0x00d4ff, 0x151a28);
@@ -935,7 +948,8 @@ async function initThatOpen() {
   // ── web-ifc API ───────────────────────────────────────────────────────────
   ifcApi = new WEBIFC.IfcAPI();
   // Indica a web-ifc dove trovare il file .wasm
-  ifcApi.SetWasmPath("/node_modules/web-ifc/", true);
+  //ifcApi.SetWasmPath("/node_modules/web-ifc/", true);
+  ifcApi.SetWasmPath("/wasm/", true);
   await ifcApi.Init();
 
   // ── Canvas events ─────────────────────────────────────────────────────────

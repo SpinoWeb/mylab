@@ -8,6 +8,7 @@ import * as ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 import Rainbow from "rainbowvis.js";
+import { myUtils } from "../../services/myUtils";
 //import { myUtils } from "../../services/myUtils";
 
 // const
@@ -174,7 +175,7 @@ const delMarkers = async () => {
   }
 };
 const setMarkers = async () => {
-  console.log("setMarkers", bridges.value);
+  //console.log("setMarkers", bridges.value);
   let coords: any[] = [];
 
   /*
@@ -270,7 +271,7 @@ const setMarkers = async () => {
         lon: lons[0],
       });
     } else {
-      console.log(_id, bridge);
+      myUtils.debug() ? console.log(_id, bridge) : console.log(_id);
     }
   }
 
@@ -304,7 +305,7 @@ const setMarkers = async () => {
 };
 
 const saveXlsx = () => {
-  if (buf.value) saveAs(new Blob([buf.value]), `bridges.xlsx`);
+  if (buf.value) saveAs(new Blob([buf.value]), "bridges.xlsx");
 };
 /*
 const updMarkers = () => {
