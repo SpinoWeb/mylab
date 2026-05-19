@@ -10,6 +10,7 @@ import Fragments from "./components/Fragments.vue";
 import IfcLite from "./components/IfcLite.vue";
 import Stream from "./components/Stream.vue";
 import Ontario from "./components/Ontario.vue";
+import Ingv from "./components/Ingv.vue";
 
 const routes: any[] = [
   { name: "home", path: "/", component: Home },
@@ -22,6 +23,7 @@ const routes: any[] = [
   { name: "ifc-lite", path: "/ifc-lite", component: IfcLite },
   { name: "stream", path: "/stream", component: Stream },
   { name: "ontario", path: "/ontario", component: Ontario },
+  { name: "ingv", path: "/ingv", component: Ingv },
 ];
 
 const router: any = createRouter({

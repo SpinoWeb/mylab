@@ -16,6 +16,7 @@ const tests = ref([
   { route: "/ifc-lite", icon: "pi pi-amazon", label: "IfcLite" },
   { route: "/stream", icon: "pi pi-box", label: "Stream" },
   { route: "/ontario", icon: "pi pi-heart-fill", label: "Ontario" },
+  { label: "Ingv", route: "/ingv", icon: "pi pi-wave-pulse" },
 ]);
 </script>
 
