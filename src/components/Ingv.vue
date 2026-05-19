@@ -176,7 +176,8 @@ const streamData = async () => {
   isLoading.value = true;
 
   myData.value = [];
-  //https://webservices.ingv.it/swagger-ui/dist/
+  // https://webservices.ingv.it/swagger-ui/dist/
+  // https://webservices.ingv.it/swagger-ui/dist/?url=https%3A%2F%2Fwebservices.ingv.it%2Fingvws%2Fsqlx%2F1%2Fswagger.json
   const url: string = `http://webservices.ingv.it/ingvws/sqlx/exPDFhour/1/?year=${year.value}&start_month=${start_month.value}&end_month=${end_month.value}&start_hour=14:00:00&end_hour=16:00:00&net=IV&sta=ACER&cha=HHZ&loc=--&type=${type.value}&limit=8000&format=json`;
 
   const response = await fetch(url);
