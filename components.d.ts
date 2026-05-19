@@ -61,6 +61,7 @@ declare module 'vue' {
     Tabs: typeof import('primevue/tabs')['default']
     ThatOpen: typeof import('./src/components/ThatOpen.vue')['default']
     ThatOpen_01: typeof import('./src/components/ThatOpen_01.vue')['default']
+    ThatOpen_02: typeof import('./src/components/ThatOpen_02.vue')['default']
     ToggleSwitch: typeof import('primevue/toggleswitch')['default']
     Tri: typeof import('./src/components/Tri.vue')['default']
     TriFragments: typeof import('./src/components/TriFragments.vue')['default']

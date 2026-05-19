@@ -5,7 +5,7 @@ import Gantt from "./components/Gantt.vue";
 import Reluis from "./components/Reluis.vue";
 import SerpApi from "./components/SerpApi.vue";
 import Tri from "./components/Tri.vue";
-import ThatOpen from "./components/ThatOpen.vue";
+import ThatOpen from "./components/ThatOpen_01.vue";
 import Fragments from "./components/Fragments.vue";
 import IfcLite from "./components/IfcLite.vue";
 import Stream from "./components/Stream.vue";

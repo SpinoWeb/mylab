@@ -194,6 +194,9 @@ let mainContainer: any,
   prevBackground: any,
   fragments: any,
   model: any;
+//
+//raycaster: THREE.Raycaster | undefined,
+//pointer: Point2D = { X: 0, Y: 0 };
 
 watch(darkMode, (n: any) => {
   //console.log(`darkMode: ${n}`);
@@ -210,14 +213,21 @@ watch(data, () => {
 onMounted(async () => {
   await setScene();
   await setFragments();
-  await setFragmentsModel();
+  await setFragmentsModel({
+    //url: "https://thatopen.github.io/engine_components/resources/frags/school_arq.frag",
+    //url: "https://thatopen.github.io/engine_components/resources/frags/school_str.frag",
+  });
   //await loadFragmentsModel();
+
+  await setCasters();
 });
 
 // -------------
 // setScene
 // -------------
 const setScene = async () => {
+  console.olog("--- setScene ---");
+
   //container = document.getElementById("container")!;
   container = document.getElementById("frag-container") as HTMLDivElement;
   if (!container) throw new Error("Missing #frag-container container");
@@ -231,6 +241,7 @@ const setScene = async () => {
     OBC.OrthoPerspectiveCamera,
     OBF.PostproductionRenderer
   >();
+  //console.log(world);
 
   world.scene = new OBC.ShadowedScene(components);
   world.renderer = new OBF.PostproductionRenderer(components, container);
@@ -267,12 +278,90 @@ const setScene = async () => {
 
   const axes: THREE.AxesHelper = new THREE.AxesHelper(1);
   world.scene.three.add(axes);
+
+  //
+  //
+  // https://github.com/mrdoob/three.js/blob/dev/examples/webgl_interactive_cubes.html
+  //raycaster = new THREE.Raycaster();
+};
+
+// -------------
+// setCasters
+// -------------
+const setCasters = async () => {
+  console.olog("--- setCasters ---");
+
+  const casters: OBC.Raycasters = components.get(OBC.Raycasters);
+  // Each raycaster is associated with a specific world.
+  // Here, we retrieve the raycaster for the `world` used in our scene.
+  const caster: OBC.SimpleRaycaster = casters.get(world);
+  console.log(caster);
+
+  // We set a selection callback, so we can decide what
+  // happen with the selected element later
+  let onSelectCallback = (_modelIdMap: OBC.ModelIdMap) => {};
+
+  container?.addEventListener(
+    //"mousedown",
+    //"mousemove",
+    "dblclick",
+    async () => {
+      const result = (await caster.castRay()) as any;
+      console.log("dblclick", getModelsIds(), result);
+      if (!result) return;
+      // The modelIdMap is how selections are represented in the engine.
+      // The keys are modelIds, while the values are sets of localIds (items within the model)
+      const modelIdMap = {
+        [result.fragments.modelId]: new Set([result.localId]),
+      };
+      onSelectCallback(modelIdMap);
+    },
+  );
+
+  /*
+  container?.addEventListener("mousemove", async (event) => {
+    pointer.X = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.Y = -(event.clientY / window.innerHeight) * 2 + 1;
+    console.log(pointer);
+  });
+  */
+
+  let onItemSelected = () => {};
+  let attributes: FRAGS.ItemData | undefined;
+
+  // We set the color outside just to be able to change it from the UI
+  const color = new THREE.Color("purple");
+
+  onSelectCallback = async (modelIdMap) => {
+    const modelId = Object.keys(modelIdMap)[0];
+    if (modelId && fragments.list.get(modelId)) {
+      const model = fragments.list.get(modelId)!;
+      const [data] = await model.getItemsData([...modelIdMap[modelId]]);
+      attributes = data;
+    }
+
+    await fragments.highlight(
+      {
+        color,
+        renderedFaces: FRAGS.RenderedFaces.ONE,
+        opacity: 1,
+        transparent: false,
+      },
+      modelIdMap,
+    );
+
+    await fragments.core.update(true);
+
+    onItemSelected();
+  };
 };
 
 // -------------
 // setCameraPreset
 // -------------
 const setCameraPreset = (preset: string = "3d") => {
+  console.olog("--- setCameraPreset ---");
+
   //view.value = preset;
   const ctl = world?.camera?.controls;
   if (!ctl) return;
@@ -340,12 +429,18 @@ const fitCamera = () => {
 // setFragments
 // -------------
 const setFragments = async () => {
+  console.olog("--- setFragments ---");
+
   // `FragmentsModels.getWorker()` fetches the matching worker for this library version from unpkg
   // and returns a blob URL.
   // You can also pass your own URL to `fragments.init(...)` if you'd rather host the worker yourself.
   const workerUrl = await FRAGS.FragmentsModels.getWorker();
   fragments = components.get(OBC.FragmentsManager);
   fragments.init(workerUrl);
+
+  //
+  //world.camera.controls.addEventListener("update", () =>  fragments.core.update());
+  //
 
   // Remove z fighting
   fragments.core.models.materials.list.onItemSet.add(
@@ -385,6 +480,14 @@ const setFragments = async () => {
     },
   );
 
+  /*
+  fragments.list.onItemSet.add(({ value: model }: { value: any }) => {
+    model.useCamera(world.camera.three);
+    world.scene.three.add(model.object);
+    fragments.core.update(true);
+  });
+  */
+
   world.renderer.postproduction.enabled = true;
   //world.renderer.postproduction.style = OBF.PostproductionAspect.COLOR_PEN;
 };
@@ -392,17 +495,35 @@ const setFragments = async () => {
 // -------------
 // setFragmentsModel
 // -------------
-const setFragmentsModel = async (modelId: string = "my-model") => {
-  const bytes = FRAGS.EditUtils.newModel({ raw: true });
-  model = await fragments.core.load(bytes, {
-    modelId: modelId,
-    camera: world.camera.three,
-    raw: true,
-  });
+const setFragmentsModel = async ({
+  modelId,
+  url,
+}: {
+  modelId?: string;
+  url?: string;
+}) => {
+  console.olog("--- setFragmentsModel ---");
 
-  //const file = await fetch("https://thatopen.github.io/engine_fragment/resources/frags/school_arq.frag");
-  //const buffer = await file.arrayBuffer();
-  //model = await fragments.load(buffer, { modelId: modelId });
+  if (!modelId) modelId = "my-model";
+
+  if (url) {
+    //
+    // fetch
+    //
+    const file = await fetch(url);
+    const buffer = await file.arrayBuffer();
+    model = await fragments.core.load(buffer, { modelId: modelId });
+  } else {
+    //
+    // init blank model
+    //
+    const bytes = FRAGS.EditUtils.newModel({ raw: true });
+    model = await fragments.core.load(bytes, {
+      modelId: modelId,
+      camera: world.camera.three,
+      raw: true,
+    });
+  }
 
   world.scene.three.add(model.object);
   await fragments.core.update(true);
@@ -1297,7 +1418,7 @@ const clear = async (modelId: string = "my-model") => {
   world.scene.three.add(axes);
 
   //
-  await setFragmentsModel(modelId);
+  await setFragmentsModel({ modelId });
 };
 
 // -------------
