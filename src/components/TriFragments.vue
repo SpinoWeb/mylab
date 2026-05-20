@@ -313,8 +313,17 @@ const setScene = async () => {
   mouse = new THREE.Vector2();
 
   container?.addEventListener("mousemove", (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const clientWidth: number = container?.clientWidth
+      ? container?.clientWidth
+      : window.innerWidth;
+    const clientHeight: number = container?.clientHeight
+      ? container?.clientHeight
+      : window.innerHeight;
+    mouse.x = (event.clientX / clientWidth) * 2 - 1;
+    mouse.y = -(event.clientY / clientHeight) * 2 + 1;
+
+    //mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    //mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
   });
 
   //
@@ -325,25 +334,25 @@ const setScene = async () => {
   container?.addEventListener("pointermove", () => {
     raycaster?.setFromCamera(mouse, world.camera.three);
 
-    const results = raycaster?.intersectObject(world.scene.three, true);
+    const group = world.scene.three.getObjectByName("framesSolids");
+    if (!group) return null;
+    const results = raycaster?.intersectObjects([group], true);
 
     if (!results) return null;
     if (results.length === 0) return null;
 
     // Find result with smallest distance
-    let closestResult = results[0]; // devi prendere il primo che ha il name != ''
+    let closestResult: any = results[0]; // devi prendere il primo che ha il name != ''
 
+    /*
     let i: number = 0;
     while (i < results.length) {
       const result = results[i];
       closestResult = result;
-
-      //if (!result.hasOwnProperty("distance")) continue;
       if (result.object.name != "") break;
-      //if (result.object.visible == false) continue;
-
       i++;
     }
+    */
 
     let minDistance = closestResult.hasOwnProperty("distance")
       ? closestResult.distance
@@ -352,18 +361,38 @@ const setScene = async () => {
     for (let i = 1; i < results.length; i++) {
       const result = results[i];
       if (!result.hasOwnProperty("distance")) continue;
-      if (result.object.name == "") continue;
-      if (result.object.visible == false) continue;
+      //if (result.object.name == "") continue;
+      //if (result.object.visible == false) continue;
 
       if (result.distance < minDistance) {
         minDistance = result.distance;
         closestResult = result;
       }
     }
+    //console.log(closestResult.object.type);
 
-    //if (closestResult.object.name == "") break;
-    console.log("name", closestResult.object.name);
-    //console.log(getLogicalObject(closestResult.object));
+    const {
+      name,
+      type,
+      material,
+      parent,
+    }: { name: string; type: string; material?: any; parent: THREE.Object3D } =
+      closestResult.object;
+
+    const mesh: any = parent.children.find((child: any) => child.isMesh);
+    if (mesh && mesh.material) {
+      mesh.material.color.set(0xff00ff);
+    }
+
+    //if (type === "LineSegments") {
+    /*
+    if (material) {
+      closestResult.object.material.color = new THREE.Color(Math.random() * 0xffffff);
+      closestResult.object.material.needsUpdate = true;
+    }
+    */
+    console.log(name, type, parent.name);
+    //}
   });
 };
 
@@ -1055,7 +1084,8 @@ const addFrameExtrude = ({
     startExtrude,
   );
   const lengthExtrude: number = directionExtrude.length();
-  const axisDirectionExtrude: THREE.Vector3 = directionExtrude.normalize();
+  //const axisDirectionExtrude: THREE.Vector3 =
+  directionExtrude.normalize();
   //console.log("lengthExtrude", lengthExtrude);
 
   const { Shape } = section;
@@ -1203,7 +1233,7 @@ const addFrameExtrude = ({
   });
 
   material.transparent = true;
-  material.opacity = extrudeOpacity ? extrudeOpacity : 0.7; // 0.7
+  material.opacity = extrudeOpacity ? extrudeOpacity : 0.75; // 0.7
   let mesh: THREE.Mesh = new THREE.Mesh(geometry, material);
 
   // extrudeFrames
@@ -1213,6 +1243,7 @@ const addFrameExtrude = ({
   //
   extrude.name = `Frame-${Frame}-Extrude`;
   //extrude.visible = false;
+  extrude.userData.id = `Frame-${Frame}-Extrude`;
 
   // move to correct position
   //
