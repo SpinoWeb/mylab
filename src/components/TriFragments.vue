@@ -63,7 +63,9 @@
       </div>
     </div>
 
-    <div class="absolute top-12 right-0 p-2">{{ getModelsIds() }}</div>
+    <div class="absolute top-12 right-0 p-2">
+      <Button label="items" @click="getModelList()" />
+    </div>
 
     <ConsoleLog :loading="loading" />
   </div>
@@ -139,6 +141,7 @@ const loading = toRef(props, "loading");
 
 import { inject } from "vue";
 import { myUtils } from "../services/myUtils";
+import { FileUploadBeforeSendEvent } from "primevue/fileupload";
 //const darkMode = inject("darkMode");
 const darkMode = inject("darkMode", true);
 
@@ -186,16 +189,16 @@ const Settings = {
 };
 
 // init
-let mainContainer: any,
-  container: HTMLDivElement | undefined,
+let container: HTMLDivElement | undefined,
   components: OBC.Components,
   worlds: OBC.Worlds,
   world: any,
-  prevBackground: any,
+  //prevBackground: any,
   fragments: any,
   model: any;
 //
-//raycaster: THREE.Raycaster | undefined,
+let raycaster: THREE.Raycaster | undefined, mouse: THREE.Vector2;
+//lastMouseEvent: MouseEvent | null,
 //pointer: Point2D = { X: 0, Y: 0 };
 
 watch(darkMode, (n: any) => {
@@ -219,7 +222,32 @@ onMounted(async () => {
   });
   //await loadFragmentsModel();
 
-  await setCasters();
+  // solo per gli oggetti del fragments
+  //await setCasters();
+  //await setRaycaster();
+
+  /*
+    per il raycaster:
+
+    usa quello di threejs e prova ad adattare l'esempio del fragment per
+    restituire l'oggetto più vicino
+    https://docs.thatopen.com/Tutorials/Fragments/Fragments/FragmentsModels/Raycasting#-setting-up-raycaster
+    
+    if (results.length === 0) return null;
+
+    // Find result with smallest distance
+    let closestResult = results[0];
+    let minDistance = closestResult.distance;
+
+    for (let i = 1; i < results.length; i++) {
+      if (results[i].distance < minDistance) {
+        minDistance = results[i].distance;
+        closestResult = results[i];
+      }
+    }
+
+    return closestResult;
+  */
 });
 
 // -------------
@@ -265,7 +293,7 @@ const setScene = async () => {
     },
   });
 
-  const prevBackground = world.scene.three.background;
+  //const prevBackground = world.scene.three.background;
 
   await world.scene.updateShadows();
 
@@ -280,10 +308,71 @@ const setScene = async () => {
   world.scene.three.add(axes);
 
   //
+  // ascolta il mouse
   //
-  // https://github.com/mrdoob/three.js/blob/dev/examples/webgl_interactive_cubes.html
-  //raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  container?.addEventListener("mousemove", (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  });
+
+  //
+  // raycaster
+  //
+  raycaster = new THREE.Raycaster();
+
+  container?.addEventListener("pointermove", () => {
+    raycaster?.setFromCamera(mouse, world.camera.three);
+
+    const results = raycaster?.intersectObject(world.scene.three, true);
+
+    if (!results) return null;
+    if (results.length === 0) return null;
+
+    // Find result with smallest distance
+    let closestResult = results[0]; // devi prendere il primo che ha il name != ''
+
+    let i: number = 0;
+    while (i < results.length) {
+      const result = results[i];
+      closestResult = result;
+
+      //if (!result.hasOwnProperty("distance")) continue;
+      if (result.object.name != "") break;
+      //if (result.object.visible == false) continue;
+
+      i++;
+    }
+
+    let minDistance = closestResult.hasOwnProperty("distance")
+      ? closestResult.distance
+      : Number.MAX_VALUE;
+
+    for (let i = 1; i < results.length; i++) {
+      const result = results[i];
+      if (!result.hasOwnProperty("distance")) continue;
+      if (result.object.name == "") continue;
+      if (result.object.visible == false) continue;
+
+      if (result.distance < minDistance) {
+        minDistance = result.distance;
+        closestResult = result;
+      }
+    }
+
+    //if (closestResult.object.name == "") break;
+    console.log("name", closestResult.object.name);
+    //console.log(getLogicalObject(closestResult.object));
+  });
 };
+
+function getLogicalObject(obj: THREE.Object3D) {
+  while (obj.parent && !obj.userData?.id) {
+    obj = obj.parent;
+  }
+  return obj;
+}
 
 // -------------
 // setCasters
@@ -295,7 +384,7 @@ const setCasters = async () => {
   // Each raycaster is associated with a specific world.
   // Here, we retrieve the raycaster for the `world` used in our scene.
   const caster: OBC.SimpleRaycaster = casters.get(world);
-  console.log(caster);
+  //console.log(caster);
 
   // We set a selection callback, so we can decide what
   // happen with the selected element later
@@ -353,6 +442,78 @@ const setCasters = async () => {
     await fragments.core.update(true);
 
     onItemSelected();
+  };
+};
+
+// -------------
+// setRaycast
+// -------------
+const raycast = async (data: {
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  mouse: THREE.Vector2;
+  dom: HTMLCanvasElement;
+}) => {
+  const results = [];
+  for (const [_, model] of fragments.core.models.list) {
+    const result = await model.raycast(data);
+    if (result) {
+      results.push(result);
+    }
+  }
+  await Promise.all(results);
+  if (results.length === 0) return null;
+
+  // Find result with smallest distance
+  let closestResult = results[0];
+  let minDistance = closestResult.distance;
+
+  for (let i = 1; i < results.length; i++) {
+    if (results[i].distance < minDistance) {
+      minDistance = results[i].distance;
+      closestResult = results[i];
+    }
+  }
+
+  return closestResult;
+};
+const setRaycaster = async () => {
+  console.olog("--- setRaycaster ---");
+
+  const mouse = new THREE.Vector2();
+
+  let onRaycastHoverResult = (_result: FRAGS.RaycastResult | null) => {};
+  container?.addEventListener("pointermove", async (event) => {
+    mouse.x = event.clientX;
+    mouse.y = event.clientY;
+    const result = await raycast({
+      camera: world.camera.three,
+      mouse,
+      dom: world.renderer!.three.domElement!,
+    });
+    onRaycastHoverResult(result);
+  });
+
+  //
+
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 2),
+  ]);
+
+  const lineMaterial = new THREE.LineBasicMaterial({ color: "#FF0" });
+  const line = new THREE.Line(lineGeometry, lineMaterial);
+  world.scene.three.add(line);
+
+  onRaycastHoverResult = (result) => {
+    //console.log(result);
+    line.visible = !!result;
+    if (!result) return;
+    console.log(result);
+    const { point, normal } = result;
+    if (!normal) return;
+    line.position.copy(point);
+    const look = point.clone().add(normal);
+    line.lookAt(look);
   };
 };
 
@@ -586,6 +747,25 @@ const getModelsIds = () => {
   const ids = [...models].map((model) => model.modelId);
   //console.log("getModelsIds", ids);
   return ids;
+};
+
+// -------------
+// getModelList
+// -------------
+const getModelList = async (modelId: string = "my-model") => {
+  const Ids = getModelsIds();
+  console.log(Ids);
+
+  //const model = fragments.core.models.list.get(modelId);
+  console.log(model);
+  //if (!model) return null;
+
+  const items = await model.getItems();
+  console.log(items);
+
+  items.forEach((item: any) => {
+    console.log(item);
+  });
 };
 
 // -------------
@@ -1295,6 +1475,7 @@ const _play = async (): Promise<void> => {
     });
 
     if (line) world.scene.three.add(line);
+    //console.log(line.name)
 
     if (label) {
       const group = world.scene.three.getObjectByName("framesLabels");

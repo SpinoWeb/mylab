@@ -178,11 +178,18 @@ export const myTri = {
     //console.log("getLine", line);
 
     // assign to line: name, visible
+
     Object.assign(line, {
       //id: id,
       name: name,
       visible: visible,
     });
+
+    line.userData = {
+      id: name,
+      name: name,
+      type: "line",
+    };
 
     line.computeLineDistances();
 
