@@ -5,7 +5,8 @@ import Gantt from "./components/Gantt.vue";
 import Reluis from "./components/Reluis.vue";
 import SerpApi from "./components/SerpApi.vue";
 import Tri from "./components/Tri.vue";
-import ThatOpen from "./components/ThatOpen_01.vue";
+import ThatOpen_01 from "./components/ThatOpen_01.vue";
+import WebIfc from "./components/WebIfc.vue";
 import Fragments from "./components/Fragments.vue";
 import IfcLite from "./components/IfcLite.vue";
 import Stream from "./components/Stream.vue";
@@ -18,7 +19,8 @@ const routes: any[] = [
   { name: "reluis", path: "/reluis", component: Reluis },
   { name: "serpapi", path: "/serpapi", component: SerpApi },
   { name: "tri", path: "/tri", component: Tri },
-  { name: "that-open", path: "/that-open", component: ThatOpen },
+  { name: "that-open", path: "/that-open", component: ThatOpen_01 },
+  { name: "web-ifc", path: "/web-ifc", component: WebIfc },
   { name: "fragments", path: "/fragments", component: Fragments },
   { name: "ifc-lite", path: "/ifc-lite", component: IfcLite },
   { name: "stream", path: "/stream", component: Stream },

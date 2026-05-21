@@ -82,7 +82,7 @@ import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 //import * as BUI from "@thatopen/ui";
-//import * as WEBIFC from "web-ifc";
+import * as WEBIFC from "web-ifc";
 //import Stats from "stats.js";
 import * as FRAGS from "@thatopen/fragments";
 
@@ -190,9 +190,9 @@ const Settings = {
 
 // init
 let container: HTMLDivElement | undefined,
-  components: OBC.Components,
-  worlds: OBC.Worlds,
-  world: any,
+  components: OBC.Components, // OBC.Components
+  worlds: OBC.Worlds, // OBC.Worlds
+  world: any, // world corrente
   //prevBackground: any,
   fragments: any,
   model: any;
@@ -200,6 +200,22 @@ let container: HTMLDivElement | undefined,
 let raycaster: THREE.Raycaster | undefined, mouse: THREE.Vector2;
 //lastMouseEvent: MouseEvent | null,
 //pointer: Point2D = { X: 0, Y: 0 };
+
+// WebIfc
+let ifcApi: WEBIFC.IfcAPI | null = null; // WEBIFC.IfcAPI — usata per generare il file STEP
+let modelID: number | null = null; // ID modello web-ifc
+const cfg = ref({
+  name: "Progetto BIM",
+  org: "Studio Tecnico",
+  schema: "IFC4",
+});
+
+const modelReady = ref(false);
+const selIdx = ref(null);
+const elements = ref([]); // array di element-data (non IFC objects)
+const logs = ref([]);
+const stepText = ref("");
+const ifcEntityCount = ref(0);
 
 watch(darkMode, (n: any) => {
   //console.log(`darkMode: ${n}`);
@@ -226,28 +242,29 @@ onMounted(async () => {
   //await setCasters();
   //await setRaycaster();
 
-  /*
-    per il raycaster:
+  // ── web-ifc API ───────────────────────────────────────────────────────────
+  ifcApi = new WEBIFC.IfcAPI();
+  // Indica a web-ifc dove trovare il file .wasm
+  //ifcApi.SetWasmPath("/node_modules/web-ifc/", true);
+  ifcApi.SetWasmPath("./wasm/", true);
+  await ifcApi.Init();
 
-    usa quello di threejs e prova ad adattare l'esempio del fragment per
-    restituire l'oggetto più vicino
-    https://docs.thatopen.com/Tutorials/Fragments/Fragments/FragmentsModels/Raycasting#-setting-up-raycaster
-    
-    if (results.length === 0) return null;
+  // Crea un modello vuoto in web-ifc
+  modelID = ifcApi.CreateModel({
+    schema:
+      cfg.value.schema === "IFC4" ? WEBIFC.Schemas.IFC4 : WEBIFC.Schemas.IFC2X3,
+  });
+  console.log("modelID", modelID);
 
-    // Find result with smallest distance
-    let closestResult = results[0];
-    let minDistance = closestResult.distance;
+  elements.value = [];
+  selIdx.value = null;
+  modelReady.value = true;
 
-    for (let i = 1; i < results.length; i++) {
-      if (results[i].distance < minDistance) {
-        minDistance = results[i].distance;
-        closestResult = results[i];
-      }
-    }
-
-    return closestResult;
-  */
+  console.log(
+    `Modello "${cfg.value.name}" creato con web-ifc (${cfg.value.schema})`,
+    "success",
+  );
+  _refreshStep();
 });
 
 // -------------
@@ -1648,6 +1665,54 @@ const setObjectVisible = (
     visible,
   });
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT — usa web-ifc per serializzare il modello
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Serializza il modello corrente in formato STEP con web-ifc
+ * e aggiorna la preview.
+ */
+function _refreshStep() {
+  if (!ifcApi || modelID === null) return;
+  try {
+    const data = ifcApi.SaveModel(modelID);
+    const text = new TextDecoder().decode(data);
+    stepText.value = text;
+    // Conta le entità STEP (#NNN=...)
+    ifcEntityCount.value = (text.match(/^#\d+=/gm) || []).length;
+  } catch (e) {
+    stepText.value = `/* Errore serializzazione: ${e} */`;
+  }
+}
+
+function exportIfc() {
+  if (!ifcApi || modelID === null) return;
+  _refreshStep();
+  const data: any = ifcApi.SaveModel(modelID); // Uint8Array<ArrayBufferLike>
+  const blob = new Blob([data], { type: "application/x-step" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${cfg.value.name.replace(/\s+/g, "_")}.ifc`;
+  a.click();
+  URL.revokeObjectURL(url);
+  console.log(
+    `IFC esportato via web-ifc (${elements.value.length} elementi)`,
+    "success",
+  );
+}
+
+async function copyStep() {
+  _refreshStep();
+  try {
+    await navigator.clipboard.writeText(stepText.value);
+    console.log("STEP copiato", "success");
+  } catch {
+    console.log("Impossibile copiare", "error");
+  }
+}
 </script>
 
 <style scoped>

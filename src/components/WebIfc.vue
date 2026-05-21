@@ -897,35 +897,40 @@ async function initThatOpen() {
   components = new OBC.Components();
 
   worlds = components.get(OBC.Worlds);
+
   world = worlds.create();
-  //world = worlds.create<OBC.ShadowedScene, OBC.OrthoPerspectiveCamera, OBF.PostproductionRenderer>();
+  //world = worlds.create<    OBC.ShadowedScene,    OBC.OrthoPerspectiveCamera,    OBF.PostproductionRenderer  >();
+  //console.log(world);
 
   world.scene = new OBC.ShadowedScene(components);
   world.renderer = new OBF.PostproductionRenderer(components, canvasEl.value);
   world.camera = new OBC.OrthoPerspectiveCamera(components);
 
+  // Source - https://stackoverflow.com/a/44781658
+  //world.camera.up.set(0, 0, 1);
+
   components.init();
 
-  world.camera.controls.setLookAt(50, 50, 50, 0, 0, 0);
+  world.camera.controls?.setLookAt(25, 25, 25, 0, 0, 0);
 
+  world.renderer.showLogo = false;
   world.renderer.three.shadowMap.enabled = true;
   world.renderer.three.shadowMap.type = THREE.VSMShadowMap;
 
-  // Renderer
-  //world.renderer = new OBC.SimpleRenderer(components, canvasEl.value);
-  //world.renderer.postproduction.enabled = false;
+  world.scene.setup({
+    shadows: {
+      cascade: 1,
+      resolution: 2048,
+    },
+  });
 
-  // Scena
-  //world.scene = new OBC.SimpleScene(components);
-  //world.scene.setup(); // aggiunge luci di default
-  //world.scene.three.background = new THREE.Color(0x070910);
+  //const prevBackground = world.scene.three.background;
 
-  // Camera
-  //world.camera = new OBC.SimpleCamera(components);
-  //world.camera.controls.setLookAt(15, 15, 15, 0, 0, 0);
-  //world.camera.controls.enableDamping = true;
+  await world.scene.updateShadows();
 
-  //components.init(); // avvia il render loop interno
+  world.camera.controls?.addEventListener("rest", async () => {
+    await world.scene.updateShadows();
+  });
 
   // ── Scena extra ───────────────────────────────────────────────────────────
   const grid = new THREE.GridHelper(100, 100, 0x00d4ff, 0x151a28);
@@ -949,7 +954,7 @@ async function initThatOpen() {
   ifcApi = new WEBIFC.IfcAPI();
   // Indica a web-ifc dove trovare il file .wasm
   //ifcApi.SetWasmPath("/node_modules/web-ifc/", true);
-  ifcApi.SetWasmPath("/wasm/", true);
+  ifcApi.SetWasmPath("./wasm/", true);
   await ifcApi.Init();
 
   // ── Canvas events ─────────────────────────────────────────────────────────

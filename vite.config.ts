@@ -25,6 +25,6 @@ export default defineConfig({
   },
   base: "/my-lab/",
   // ThatOpen
-  //optimizeDeps: { exclude: ["web-ifc"] },
+  optimizeDeps: { exclude: ["web-ifc"] },
   //server: { headers: { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "require-corp", }, },
 });

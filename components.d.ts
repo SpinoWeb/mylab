@@ -66,6 +66,7 @@ declare module 'vue' {
     Tri: typeof import('./src/components/Tri.vue')['default']
     TriFragments: typeof import('./src/components/TriFragments.vue')['default']
     TriViewer: typeof import('./src/components/TriViewer.vue')['default']
+    WebIfc: typeof import('./src/components/WebIfc.vue')['default']
   }
   export interface GlobalDirectives {
     Tooltip: typeof import('primevue/tooltip')['default']

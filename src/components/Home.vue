@@ -12,6 +12,7 @@ const tests = ref([
   { route: "/serpapi", icon: "pi pi-chart-bar", label: "SerpApi" },
   { route: "/tri", icon: "pi pi-box", label: "Tri" },
   { route: "/that-open", icon: "pi pi-apple", label: "ThatOpen" },
+  { route: "/web-ifc", icon: "pi pi-facebook", label: "WebIfc" },
   { route: "/fragments", icon: "pi pi-android", label: "Fragments" },
   { route: "/ifc-lite", icon: "pi pi-amazon", label: "IfcLite" },
   { route: "/stream", icon: "pi pi-box", label: "Stream" },
