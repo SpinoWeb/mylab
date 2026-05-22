@@ -12,6 +12,7 @@ import IfcLite from "./components/IfcLite.vue";
 import Stream from "./components/Stream.vue";
 import Ontario from "./components/Ontario.vue";
 import Ingv from "./components/Ingv.vue";
+import Overpass from "./components/Overpass.vue";
 
 const routes: any[] = [
   { name: "home", path: "/", component: Home },
@@ -26,6 +27,7 @@ const routes: any[] = [
   { name: "stream", path: "/stream", component: Stream },
   { name: "ontario", path: "/ontario", component: Ontario },
   { name: "ingv", path: "/ingv", component: Ingv },
+  { name: "overpass", path: "/overpass", component: Overpass },
 ];
 
 const router: any = createRouter({

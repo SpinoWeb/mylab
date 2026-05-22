@@ -38,6 +38,7 @@ declare module 'vue' {
     Ontario: typeof import('./src/components/Ontario.vue')['default']
     Opera: typeof import('./src/components/Ontario/Opera.vue')['default']
     OpList: typeof import('./src/components/SectionEditor/OpList.vue')['default']
+    Overpass: typeof import('./src/components/Overpass.vue')['default']
     Polygon: typeof import('./src/components/SectionEditor/Polygon.vue')['default']
     ProgressBar: typeof import('primevue/progressbar')['default']
     Quad: typeof import('./src/components/SectionEditor/Quad.vue')['default']

@@ -57,6 +57,7 @@ const tests = ref([
   { route: "/stream", icon: "pi pi-box", label: "Stream" },
   { route: "/ontario", icon: "pi pi-heart-fill", label: "Ontario" },
   { label: "Ingv", route: "/ingv", icon: "pi pi-wave-pulse" },
+  { label: "Overpass", route: "/overpass", icon: "pi pi-discord" },
 ]);
 </script>
 
