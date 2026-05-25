@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[      5108,        134]
-NotebookOptionsPosition[      4715,        119]
-NotebookOutlinePosition[      5155,        136]
-CellTagsIndexPosition[      5112,        133]
+NotebookDataLength[      5142,        135]
+NotebookOptionsPosition[      4749,        120]
+NotebookOutlinePosition[      5189,        137]
+CellTagsIndexPosition[      5146,        134]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -35,16 +35,16 @@ Cell[BoxData[
    RowBox[{
     RowBox[{
     "dirCT", "=", "\"\<C:\\\\xampp\\\\htdocs\\\\mylab\\\\public\\\\txt\>\""}],
-     ";"}], "\[IndentingNewLine]", "\n", 
+     ";"}], "\n", "\[IndentingNewLine]", 
    RowBox[{
     RowBox[{"dir0", "=", "dirNB"}], ";"}], "\[IndentingNewLine]", 
    RowBox[{
     RowBox[{"SetDirectory", "[", "dir0", "]"}], ";"}], "\[IndentingNewLine]", 
    "\[IndentingNewLine]", 
    RowBox[{
-    RowBox[{"rows", "=", "20000"}], ";"}], "\[IndentingNewLine]", 
+    RowBox[{"rows", "=", "100000"}], ";"}], "\[IndentingNewLine]", 
    RowBox[{
-    RowBox[{"cols", "=", "10"}], ";"}], "\[IndentingNewLine]", 
+    RowBox[{"cols", "=", "18"}], ";"}], "\[IndentingNewLine]", 
    "\[IndentingNewLine]", 
    RowBox[{
     RowBox[{"x", " ", "=", " ", "1500000000000.0"}], ";"}], 
@@ -114,8 +114,9 @@ Cell[BoxData[
    3.987909355920682*^9}, {3.9879093937493205`*^9, 3.9879094098946247`*^9}, {
    3.9879094672312784`*^9, 3.987909492731631*^9}, {3.9879095317435102`*^9, 
    3.9879095641848135`*^9}, {3.987909674926194*^9, 3.9879096757339745`*^9}, {
-   3.9879938646931257`*^9, 3.9879938650652924`*^9}},
- CellLabel->"In[1]:=",ExpressionUUID->"d981cea3-4f8f-4979-a0ab-12fdf629d0a0"]
+   3.9879938646931257`*^9, 3.9879938650652924`*^9}, {3.9887106172519493`*^9, 
+   3.9887106209640503`*^9}},ExpressionUUID->"d981cea3-4f8f-4979-a0ab-\
+12fdf629d0a0"]
 },
 WindowSize->{784.8, 494.4},
 WindowMargins->{{Automatic, 77.40000000000009}, {
@@ -135,7 +136,7 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[558, 20, 4153, 97, 447, "Input",ExpressionUUID->"d981cea3-4f8f-4979-a0ab-12fdf629d0a0"]
+Cell[558, 20, 4187, 98, 447, "Input",ExpressionUUID->"d981cea3-4f8f-4979-a0ab-12fdf629d0a0"]
 }
 ]
 *)

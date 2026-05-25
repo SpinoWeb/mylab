@@ -154,6 +154,9 @@ const myFiles = ref([
   { name: "data_20000_10", code: "data_20000_10" },
   { name: "data_50000_5", code: "data_50000_5" },
   { name: "data_100000_10", code: "data_100000_10" },
+  { name: "data_100000_18", code: "data_100000_18" },
+  { name: "MinAccelerations", code: "MinAccelerations" },
+  { name: "MaxAccelerations", code: "MaxAccelerations" },
 ]);
 const myFile = ref(myFiles.value[0]);
 const isLoading = ref<boolean>(false);
