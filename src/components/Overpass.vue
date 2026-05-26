@@ -3,51 +3,22 @@
     <!-- Sidebar -->
     <aside class="w-96 shrink-0 border-r overflow-auto flex flex-col gap-2">
       <div class="flex flex-row gap-2">
-        <Select
-          v-model="myFile"
-          :options="myFiles"
-          optionLabel="name"
-          placeholder="Select a file"
-          class="w-3/4"
-          @change="resetData"
-        />
         <Button label="fetch" @click="fetchData" :disabled="isLoading" />
+        <Button label="reset" @click="resetData" :disabled="isLoading" />
       </div>
 
       <div class="flex flex-row gap-2">
-        <div>fields: {{ fields.length }}</div>
-        <div>records: {{ records.length }}</div>
+        <div>blds: {{ blds.length }}</div>
       </div>
 
-      <div>
-        <ol>
-          <li v-for="(field, fdex) in fields" class="text-left">
-            {{ fdex }} : {{ field.id }}
-            <ul class="flex flex-col gap-1 border-top-1">
-              <li
-                v-for="(value, key) in field.info"
-                :key="key"
-                class="w-5/6 flex flex-row gap-1"
-              >
-                <div>&nbsp;</div>
-                <div>{{ key }}:</div>
-                <div>{{ value }}</div>
-              </li>
-            </ul>
-          </li>
-        </ol>
-      </div>
-
-      <!--
       <div>
         <VueJsonPretty
-          :data="records"
+          :data="blds"
           :showIcon="true"
           :showLength="true"
-          :theme="darkMode ? 'dark' : 'light'"
+          theme="dark"
         />
       </div>
-      -->
     </aside>
 
     <!-- Main -->
@@ -55,7 +26,7 @@
       <div class="p-2 min-w-max">
         <!-- Contenuto molto largo -->
         <div class="w-full min-h-[600px] rounded p-2 flex flex-col border-1">
-          <Map :fields="fields" :records="records" />
+          <Map :blds="blds" :box="box" />
           <!--  
           <table>
             <thead>
@@ -113,22 +84,43 @@ const myFiles = ref([
 const myFile = ref(myFiles.value[0]);
 const isLoading = ref<boolean>(false);
 
-const fields = ref<any[]>([]);
-const records = ref<any[]>([]);
-//const series = ref<any[]>([]);
+const blds = ref<any[]>([]);
+
+//const south = areaData[1].lat;
+//const west = areaData[1].lng;
+//const north = areaData[0].lat;
+//const east = areaData[0].lng;
+
+const box = ref({
+  south: 38.157, // 1.lat
+  west: 14.828, // 1.lng
+  north: 38.158, // 0.lat
+  east: 14.829, // 0.lng
+});
+
+const checkIsBig = () => {
+  const a = box.value.north - box.value.south;
+  const b = box.value.east - box.value.west;
+
+  console.log("checkIsBig", a + b);
+  return a + b > 0.1;
+};
 
 const fetchData = async () => {
   //console.log("fetchData");
 
   isLoading.value = true;
 
-  const box = { south: 0, west: 0, north: 0, east: 0 };
+  checkIsBig();
 
-  const south = box.south;
-  const west = box.west;
-  const north = box.north;
-  const east = box.east;
+  const south = box.value.south;
+  const west = box.value.west;
+  const north = box.value.north;
+  const east = box.value.east;
+
   const query = `[out:json][timeout:25];(way["building"]( ${south},${west},${north},${east} );relation["building"]( ${south},${west},${north},${east} ););out body geom;`;
+  //const query = `[out:json][timeout:25];(way["highway"](${south},${west},${north},${east}););out body geom;`;
+  console.log(query);
 
   try {
     const response = await fetch("https://overpass-api.de/api/interpreter", {
@@ -137,15 +129,28 @@ const fetchData = async () => {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
     const data = await response.json();
-    console.log(data);
+    console.log("data", data);
 
-    const blds = data.elements.map((element: any) => ({
+    blds.value = data.elements.map((element: any) => ({
       id: element.id,
       tags: element.tags,
+      bounds: element.bounds,
       geometry: element.geometry
         ? element.geometry.map((pt: any) => ({ lat: pt.lat, lng: pt.lon }))
         : undefined,
     }));
+
+    /*
+    blds.value = data.elements.map((element: any) =>
+      Object.assign(element, {
+        geometry: element.geometry
+          ? element.geometry.map((pt: any) => ({ lat: pt.lat, lng: pt.lon }))
+          : undefined,
+      }),
+    );
+    */
+
+    //console.log("blds", blds.value);
   } catch (error) {
     console.error("Error fetching data:", error);
   } finally {
@@ -157,8 +162,7 @@ const fetchData = async () => {
 // resetData
 // ----------------------
 const resetData = () => {
-  fields.value = [];
-  records.value = [];
+  blds.value = [];
 };
 </script>
 

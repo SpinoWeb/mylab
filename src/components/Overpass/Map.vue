@@ -19,12 +19,14 @@ const circleMarkerUnSelected = {
   fillOpacity: 0.5,
   radius: 6,
 };
-const circleMarkerSelected = {
+const circlepolygonselected = {
   color: "crimson",
   fillColor: "crimson",
   fillOpacity: 0.75,
   radius: 8,
 };
+
+const color = "crimson";
 
 //
 // proprietà dell'opera
@@ -67,44 +69,33 @@ interface Field {
 }
 
 interface Props {
-  fields: Field[];
-  records: any[];
+  blds?: any[];
+  box?: any;
 }
 const props = withDefaults(defineProps<Props>(), {
-  fields: () => [],
-  records: () => [],
+  blds: () => [],
+  box: () => {
+    return {
+      south: 38.157, // 1.lat
+      west: 14.828, // 1.lng
+      north: 38.158, // 0.lat
+      east: 14.829, // 0.lng
+    };
+  },
 });
 
-const fields = toRef(props, "fields");
-const records = toRef(props, "records");
-const bridges = computed(() => {
-  let bridges: any[] = [];
-  for (let r = 0; r < records.value.length; r++) {
-    const record = records.value[r];
+const blds = toRef(props, "blds");
+const box = toRef(props, "box");
 
-    let obj: any = {};
-    for (let j = 0; j < record.length; j++) {
-      const value = record[j];
-      const field: Field = fields.value[j];
-      obj[field.id.trim()] = value;
-    }
-
-    //console.log(obj);
-    bridges.push(obj);
-  }
-
-  //console.log(bridges);
-  return bridges;
-});
-
-const keysOfItem = computed(() => fields.value.map((x) => x.id));
+const refLat = computed(() => (box.value.south + box.value.north) / 2);
+const refLng = computed(() => (box.value.west + box.value.east) / 2);
 
 // define model
-watch(bridges, () => setMarkers(), { deep: true });
+watch(blds, () => setPolygons(), { deep: true });
 
 // ref
 const map = ref();
-const markers = ref<any[]>([]);
+const polygons = ref<any[]>([]);
 
 const buf = ref();
 
@@ -153,7 +144,7 @@ const initMap = async () => {
   //
   // map
   //
-  map.value = L.map("mapContainer").setView([37.5, 14.5], 8);
+  map.value = L.map("mapContainer").setView([refLat.value, refLng.value], 6);
   L.tileLayer("http://{s}.tile.osm.org/{z}/{x}/{y}.png", {
     attribution:
       '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
@@ -162,7 +153,7 @@ const initMap = async () => {
   let customPane = map.value.createPane("customPane");
   L.canvas({ pane: "customPane" });
   customPane.style.zIndex = 399; // put just behind the standard overlay pane which is at 400
-  //L.marker([37.5, 14.5]).addTo(map.value);
+  L.marker([refLat.value, refLng.value]).addTo(map.value);
 
   //console.log(map.value);
 
@@ -172,29 +163,29 @@ const initMap = async () => {
     console.log("Coordinate salvate:", corner1.value.lat, corner1.value.lng);
   });
 
-  // set markers
-  await setMarkers();
+  // set polygons
+  await setPolygons();
 };
 
-// remove markers
-const delMarkers = async () => {
-  //console.log("Map > delMarkers");
+// remove polygons
+const delPolygons = async () => {
+  //console.log("Map > delPolygons");
 
-  for await (const item of markers.value) {
-    map.value.removeLayer(item.marker);
+  for await (const item of polygons.value) {
+    map.value.removeLayer(item.polygon);
   }
 };
-const setMarkers = async () => {
-  //console.log("setMarkers", bridges.value);
+const setPolygons = async () => {
+  //console.log("setPolygons", blds.value);
   let coords: any[] = [];
 
   /*
   const clickOnMarker = (e: any) => {
-    console.log("setMarkers > clickOnMarker", e);
+    console.log("setPolygons > clickOnMarker", e);
   };
   */
 
-  await delMarkers();
+  await delPolygons();
 
   const myRainbow: Rainbow = new Rainbow();
   const min: number = 1,
@@ -202,56 +193,46 @@ const setMarkers = async () => {
   myRainbow.setNumberRange(min, max);
   myRainbow.setSpectrum("red", "green");
 
-  markers.value = [];
-  for await (const bridge of bridges.value) {
-    //console.log(bridge);
+  polygons.value = [];
+  for await (const bld of blds.value) {
+    //console.log(bld);
 
-    const { _id, Latitude, Longitude, LATITUDE, LONGITUDE } = bridge;
-    let CURRENT_BCI = bridge.hasOwnProperty("CURRENT BCI")
-      ? bridge["CURRENT BCI"]
-      : max; // default value
-    //console.log(_id, Latitude, Longitude, LATITUDE, LONGITUDE, CURRENT_BCI);
+    const { id, tags, geometry } = bld;
 
-    //
-    // set marker
-    //
-    if ((Latitude && Longitude) || (LATITUDE && LONGITUDE)) {
-      let lats = [];
-      let lons = [];
+    const latlngs: any[][] = [];
+    for (let i = 0; i < geometry.length; i++) {
+      const v = geometry[i];
+      //console.log(v);
+      latlngs.push([v.lat, v.lng]);
+    }
 
-      if (Latitude && Longitude) {
-        lats = Latitude.split("|").map((x: string) => parseFloat(x));
-        lons = Longitude.split("|").map((x: string) => parseFloat(x));
-      }
+    // create a polygon from an array of LatLng points
+    const polygon = L.polygon(latlngs, {
+      //color: color,
+      //weight: 1,
+      fillColor: color,
+      fillOpacity: 0.5,
+    }); //.addTo(map.value);
 
-      if (LATITUDE && LONGITUDE) {
-        lats = LATITUDE.split("|").map((x: string) => parseFloat(x));
-        lons = LONGITUDE.split("|").map((x: string) => parseFloat(x));
-      }
+    // polygons
+    polygons.value.push({
+      id: id,
+      polygon: polygon,
+    });
 
-      //console.log(_id, lats, lons);
-      if (lats.includes(NaN) || lons.includes(NaN)) continue;
+    // add to map
+    map.value.addLayer(polygon);
 
-      let html: string = "<b>" + _id + "</b>\n";
+    // zoom the map to the polygon
+    map.value.fitBounds(polygon.getBounds());
 
-      html += "<div style='width: 100%; height: 240px; overflow-y: auto'>";
-      html += "<table>\n<tbody>";
-      for (const key of keysOfItem.value) {
-        if (bridge.hasOwnProperty(key) && bridge[key] != null) {
-          html += "\n<tr>\n";
-          html += `<td class='p-1 border-b border-blue-gray-50'>${key}</td>`;
-          html += `<td class='p-1 border-b border-blue-gray-50'>${bridge[key]}</td>`;
-          html += "\n</tr>";
-        }
-      }
-      html += "</tbody>\n</table>\n";
-      html += "</div>";
+    // v
+    for (let i = 0; i < latlngs.length; i++) {
+      const latlng = latlngs[i];
+      //console.log(latlng);
 
-      // marker
-      const color: string = "#" + myRainbow.colourAt(CURRENT_BCI);
-      //const color:string = getColorFromScale(randomIntFromInterval());
       const marker = L.circleMarker(
-        [lats[0], lons[0]],
+        [latlng[0], latlng[0]],
         //circleMarkerUnSelected,
         {
           color: color,
@@ -259,35 +240,16 @@ const setMarkers = async () => {
           fillOpacity: 0.5,
           radius: 6,
         },
-      ).bindPopup(html);
-      //.on('click', clickOnMarker);
-
-      // markers
-      markers.value.push({
-        id: _id,
-        marker: marker,
-      });
+      );
 
       // add to map
       map.value.addLayer(marker);
-
-      //
-      // coords
-      //
-      coords.push({
-        //id: _id,
-        //label: bridge.label,
-        lat: lats[0],
-        lon: lons[0],
-      });
-    } else {
-      myUtils.debug() ? console.log(_id, bridge) : console.log(_id);
     }
   }
 
   //
   //
-  //console.log("Map > setMarkers > coords", coords);
+  //console.log("Map > setPolygons > coords", coords);
   //await io.saveFile0(coords, ".txt", "pippo");
 
   //
@@ -315,16 +277,16 @@ const setMarkers = async () => {
 };
 
 const saveXlsx = () => {
-  if (buf.value) saveAs(new Blob([buf.value]), "bridges.xlsx");
+  if (buf.value) saveAs(new Blob([buf.value]), "blds.xlsx");
 };
 /*
-const updMarkers = () => {
-  for (const item of markers.value) {
+const updpolygons = () => {
+  for (const item of polygons.value) {
     //console.log(item);
     map.value.removeLayer(item.marker);
 
     if (opereSelezionateId.value.includes(item.id)) {
-      item.marker.setStyle(circleMarkerSelected);
+      item.marker.setStyle(circlepolygonselected);
       map.value.addLayer(item.marker);
       item.marker.bringToFront();
     } else {
