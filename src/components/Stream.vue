@@ -180,7 +180,7 @@ const listOfRows = computed(() => Array.from(Array(rows.value), (x, i) => i));
 
 // https://medium.com/@AlexanderObregon/parsing-large-files-in-the-browser-using-javascript-streams-api-78cb88f30d23
 const streamData = async () => {
-  console.log("streamData");
+  //console.log("streamData");
 
   isLoading.value = true;
 
@@ -365,7 +365,7 @@ const queryData = async () => {
         .map((i) => Object.assign({}, { x: i[0], y: i[1] }))
         .sort((a, b) => a.x - b.x),
       lineWidth: 0.1,
-      name: myFile.value.name,
+      name: `${myFile.value.name} - ${i}`,
       color: myUtils.randomHexColor(),
     });
   }
@@ -390,7 +390,7 @@ const chartOptions = computed(() => {
   // legend
   const legend: any = {
     enabled: true,
-    layout: "vertical",
+    layout: "horizontal", // "vertical",
     align: "left",
     verticalAlign: "top",
     x: 50,
