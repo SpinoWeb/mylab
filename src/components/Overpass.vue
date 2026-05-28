@@ -18,7 +18,7 @@
         <label class="mt-1">Motorway</label>
         <Select
           v-model="motorway"
-          :options="['E 45', 'E 90']"
+          :options="['A18', 'A20']"
           @change="resetData"
           class="w-1/3"
         />
@@ -34,11 +34,18 @@
         <div>records: {{ records.length }}</div>
       </div>
 
+      <div class="flex flex-col gap-2">
+        <span v-for="i in bridges" class="text-left border-bottom-1">{{
+          i
+        }}</span>
+      </div>
+
       <div>
         <VueJsonPretty
           :data="records"
           :showIcon="true"
           :showLength="true"
+          :deep="2"
           theme="dark"
         />
       </div>
@@ -89,7 +96,7 @@ const box = ref<Box>({
   south: 36.5, // 1.lat
   west: 11.5, // 1.lng
 });
-const motorway = ref<string>("E 90");
+const motorway = ref<string>("A18");
 
 const checkIsBig = () => {
   const a: number = box.value.north - box.value.south;
@@ -99,6 +106,18 @@ const checkIsBig = () => {
   return a + b > 0.1;
 };
 const isBig = computed(() => checkIsBig());
+
+const bridges = computed(() => {
+  return records.value.map((x) =>
+    x.hasOwnProperty("tags")
+      ? x.tags.hasOwnProperty("bridge:name")
+        ? x.tags["bridge:name"]
+        : x.tags.hasOwnProperty("name")
+          ? x.tags.name
+          : Object.keys(x.tags)
+      : Object.keys(x),
+  );
+});
 
 //
 // https://openstreetmap-online.fandom.com/wiki/Key:bridge
@@ -119,7 +138,7 @@ const fetchData = async () => {
   //const query = `[out:json][timeout:25];(way["bridge"]( ${south},${west},${north},${east} );relation["building"]( ${south},${west},${north},${east} ););out body geom;`;
   //const query = `[out:json][timeout:25];(way[highway][bridge=yes](${south},${west},${north},${east}););out body geom;`;
   //const query = `[out:json][timeout:25];way["highway"="motorway"]["ref"="A20"]["bridge"];out geom;`;
-  const query = `[out:json][timeout:25];way["highway"="motorway"]["int_ref"="${motorway.value}"]["bridge"](${south},${west},${north},${east});out body geom;`;
+  const query = `[out:json][timeout:25];way["highway"="motorway"]["ref"="${motorway.value}"]["bridge"](${south},${west},${north},${east});out body geom;`;
   // ["man_made"="bridge"]
   console.log(query);
 

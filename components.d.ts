@@ -32,7 +32,6 @@ declare module 'vue' {
     Home: typeof import('./src/components/Home.vue')['default']
     IfcLite: typeof import('./src/components/IfcLite.vue')['default']
     Ingv: typeof import('./src/components/Ingv.vue')['default']
-    InputNumber: typeof import('primevue/inputnumber')['default']
     InputText: typeof import('primevue/inputtext')['default']
     Line: typeof import('./src/components/SectionEditor/Line.vue')['default']
     Map: typeof import('./src/components/Ontario/Map.vue')['default']
