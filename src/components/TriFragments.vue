@@ -213,7 +213,7 @@ const cfg = ref({
 const modelReady = ref(false);
 const selIdx = ref(null);
 const elements = ref([]); // array di element-data (non IFC objects)
-const logs = ref([]);
+//const logs = ref([]);
 const stepText = ref("");
 const ifcEntityCount = ref(0);
 

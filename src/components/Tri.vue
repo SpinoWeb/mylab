@@ -54,7 +54,7 @@
       <Dialog
         v-model:visible="tableDataVisible"
         header="Tables"
-        :style="{ width: '85vw' }"
+        :style="{ width: '85vw', overflow: 'auto' }"
         maximizable
         modal
         :contentStyle="{ minHeight: '480px', height: '85vh' }"
@@ -89,7 +89,7 @@
       <Dialog
         v-model:visible="triDataVisible"
         header="Tables"
-        :style="{ width: '50vw' }"
+        :style="{ width: '50vw', overflow: 'auto' }"
         maximizable
         modal
         :contentStyle="{ minHeight: '480px', height: '85vh' }"
@@ -178,6 +178,7 @@ const jobs: string[] = [
   "edificio22",
   "edificio33",
   "Modello_3",
+  "step-3",
   "po-1946",
   "roof",
   "sample04",
