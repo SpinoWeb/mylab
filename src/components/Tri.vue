@@ -178,6 +178,7 @@ const jobs: string[] = [
   "edificio22",
   "edificio33",
   "Modello_3",
+  "ModelloSAP",
   "step-3",
   "po-1946",
   "roof",
